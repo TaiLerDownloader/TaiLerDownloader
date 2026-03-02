@@ -184,14 +184,67 @@ jobs:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      - name: 📥 安装 OpenHarmony SDK
-        uses: openharmony-rs/setup-ohos-sdk@v0.1
-        id: setup-ohos
-        with:
-          version: "5.0"
+      - name: 🔧 安装系统依赖
+        run: sudo apt-get update && sudo apt-get install -y make ninja-build jq
 
-      - name: 🔧 安装系统依赖 (make + ninja)
-        run: sudo apt-get update && sudo apt-get install -y make ninja-build
+      - name: 📥 手动下载 OpenHarmony SDK
+        id: setup-ohos
+        run: |
+          SDK_VERSION="v5.0.3"
+          SDK_DIR="$HOME/ohos-sdk"
+          mkdir -p "$SDK_DIR" && cd "$SDK_DIR"
+
+          echo "📥 从 GitHub mirror 下载 OHOS SDK $SDK_VERSION ..."
+          gh release download "$SDK_VERSION" \
+            --pattern 'ohos-sdk-windows_linux-public.tar.gz*' \
+            --repo openharmony-rs/ohos-sdk
+
+          # 合并分片文件（如果有）
+          if ls ohos-sdk-windows_linux-public.tar.gz.a? 1>/dev/null 2>&1; then
+            cat ohos-sdk-windows_linux-public.tar.gz.a? > ohos-sdk-windows_linux-public.tar.gz
+            rm -f ohos-sdk-windows_linux-public.tar.gz.a?
+          fi
+
+          echo "📦 解压 SDK ..."
+          tar -xf ohos-sdk-windows_linux-public.tar.gz
+          rm -f ohos-sdk-windows_linux-public.tar.gz*
+
+          # 自动探测 native 目录（兼容不同版本的目录结构）
+          echo "🔍 探测 SDK 目录结构 ..."
+          ls -la "$SDK_DIR/"
+
+          if [ -d "$SDK_DIR/linux/native" ]; then
+            OHOS_BASE="$SDK_DIR/linux"
+          elif [ -d "$SDK_DIR/native" ]; then
+            OHOS_BASE="$SDK_DIR"
+          else
+            # 搜索 native 目录
+            NATIVE_DIR=$(find "$SDK_DIR" -maxdepth 3 -type d -name "native" | head -1)
+            if [ -n "$NATIVE_DIR" ]; then
+              OHOS_BASE=$(dirname "$NATIVE_DIR")
+            else
+              echo "❌ 找不到 native 目录"
+              find "$SDK_DIR" -maxdepth 3 -type d | head -30
+              exit 1
+            fi
+          fi
+
+          echo "✅ OHOS_BASE=$OHOS_BASE"
+          echo "✅ native 目录: $OHOS_BASE/native"
+          ls -la "$OHOS_BASE/native/" || true
+          ls -la "$OHOS_BASE/native/build/cmake/" || true
+
+          # 解压 native 目录下的 zip 包（如果有）
+          if ls "$OHOS_BASE"/native*.zip 1>/dev/null 2>&1; then
+            echo "📦 解压 native zip 包 ..."
+            for z in "$OHOS_BASE"/native*.zip; do
+              unzip -qo "$z" -d "$OHOS_BASE"
+            done
+          fi
+
+          echo "ohos-ndk-home=$OHOS_BASE/native" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: 🦀 安装 Rust nightly (OHOS 支持)
         uses: dtolnay/rust-toolchain@nightly
@@ -209,7 +262,7 @@ jobs:
 
       - name: 🏗️ 编译鸿蒙库
         env:
-          OHOS_NDK_HOME: ${{ steps.setup-ohos.outputs.ohos-base-sdk-home }}/native
+          OHOS_NDK_HOME: ${{ steps.setup-ohos.outputs.ohos-ndk-home }}
         run: |
           echo "OHOS_NDK_HOME=$OHOS_NDK_HOME"
           ls -la "$OHOS_NDK_HOME/build/cmake/" 2>/dev/null || echo "Listing NDK..."
