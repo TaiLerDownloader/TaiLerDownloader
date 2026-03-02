@@ -184,8 +184,13 @@ jobs:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
+
       - name: 🔧 安装系统依赖
-        run: sudo apt-get update && sudo apt-get install -y make ninja-build jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y make ninja-build jq clang
+          # boring-sys2 的 CMake 使用 --target=aarch64-linux-ohos，GCC 不支持，必须用 clang
+          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100
+          sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 100
 
       - name: 📥 手动下载 OpenHarmony SDK
         id: setup-ohos
