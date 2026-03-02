@@ -174,13 +174,24 @@ jobs:
       matrix:
         include:
           - target: aarch64-unknown-linux-ohos
+            ohos_arch: arm64-v8a
             suffix: arm64
           - target: x86_64-unknown-linux-ohos
+            ohos_arch: x86_64
             suffix: x86_64
 
     steps:
       - name: 📥 检出代码
         uses: actions/checkout@v4
+
+      - name: 📥 安装 OpenHarmony SDK
+        uses: openharmony-rs/setup-ohos-sdk@v0.1
+        id: setup-ohos
+        with:
+          version: "5.0"
+
+      - name: 🔧 安装系统依赖 (make + ninja)
+        run: sudo apt-get update && sudo apt-get install -y make ninja-build
 
       - name: 🦀 安装 Rust nightly (OHOS 支持)
         uses: dtolnay/rust-toolchain@nightly
@@ -196,52 +207,100 @@ jobs:
             target
           key: harmony-cargo-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
 
-      - name: 📥 下载 OpenHarmony SDK
-        run: |
-          # 下载 OHOS NDK (根据实际版本调整 URL)
-          OHOS_SDK_VERSION="4.1"
-          OHOS_NDK_URL="https://repo.huaweicloud.com/openharmony/os/${OHOS_SDK_VERSION}/ohos-sdk-linux.tar.gz"
-          mkdir -p $HOME/ohos-sdk
-          echo "⚠️  鸿蒙 SDK 下载地址需要根据实际版本调整"
-          echo "如果此步骤失败，请手动配置 OHOS NDK 路径"
-          # curl -L "$OHOS_NDK_URL" | tar xz -C $HOME/ohos-sdk || true
-
       - name: 🏗️ 编译鸿蒙库
         env:
-          OHOS_NDK_HOME: ${{ github.workspace }}/ohos-sdk/linux/native
+          OHOS_NDK_HOME: ${{ steps.setup-ohos.outputs.ohos-base-sdk-home }}/native
         run: |
-          # 配置鸿蒙交叉编译链接器
+          echo "OHOS_NDK_HOME=$OHOS_NDK_HOME"
+          ls -la "$OHOS_NDK_HOME/build/cmake/" 2>/dev/null || echo "Listing NDK..."
+
+          # 创建 clang wrapper 脚本
+          NDK_LLVM="$OHOS_NDK_HOME/llvm"
+          SYSROOT="$OHOS_NDK_HOME/sysroot"
+
+          mkdir -p $HOME/.ohos-wrappers
+
+          # aarch64 wrapper
+          cat > $HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh << WRAPPER
+          #!/bin/bash
+          exec "$NDK_LLVM/bin/clang" --target=aarch64-linux-ohos --sysroot="$SYSROOT" "\$@"
+          WRAPPER
+          chmod +x $HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh
+
+          # x86_64 wrapper
+          cat > $HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh << WRAPPER
+          #!/bin/bash
+          exec "$NDK_LLVM/bin/clang" --target=x86_64-linux-ohos --sysroot="$SYSROOT" "\$@"
+          WRAPPER
+          chmod +x $HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh
+
+          # C++ wrapper  
+          cat > $HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang++.sh << WRAPPER
+          #!/bin/bash
+          exec "$NDK_LLVM/bin/clang++" --target=aarch64-linux-ohos --sysroot="$SYSROOT" "\$@"
+          WRAPPER
+          chmod +x $HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang++.sh
+
+          cat > $HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang++.sh << WRAPPER
+          #!/bin/bash
+          exec "$NDK_LLVM/bin/clang++" --target=x86_64-linux-ohos --sysroot="$SYSROOT" "\$@"
+          WRAPPER
+          chmod +x $HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang++.sh
+
+          # 配置 Cargo linker
           mkdir -p .cargo
-          cat > .cargo/config.toml << 'EOF'
+          cat > .cargo/config.toml << 'CARGO_CFG'
           [target.aarch64-unknown-linux-ohos]
-          linker = "aarch64-unknown-linux-ohos-clang"
+          ar = "llvm-ar"
 
           [target.x86_64-unknown-linux-ohos]
-          linker = "x86_64-unknown-linux-ohos-clang"
-          EOF
+          ar = "llvm-ar"
+          CARGO_CFG
 
-          echo "⚠️  鸿蒙编译需要正确配置 OHOS NDK，此步骤可能需要手动调整"
-          cargo +nightly build --release --target ${{ matrix.target }} || echo "鸿蒙编译需要额外配置 OHOS NDK"
+          # 动态设置 linker 路径
+          echo "[target.aarch64-unknown-linux-ohos]" >> .cargo/config.toml
+          echo "linker = \"$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh\"" >> .cargo/config.toml
+          echo "" >> .cargo/config.toml
+          echo "[target.x86_64-unknown-linux-ohos]" >> .cargo/config.toml
+          echo "linker = \"$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh\"" >> .cargo/config.toml
+
+          # 设置 CC/CXX 环境变量让 aws-lc-sys/cmake 找到正确的编译器
+          export CC_aarch64_unknown_linux_ohos="$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh"
+          export CXX_aarch64_unknown_linux_ohos="$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang++.sh"
+          export CC_x86_64_unknown_linux_ohos="$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh"
+          export CXX_x86_64_unknown_linux_ohos="$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang++.sh"
+          export AR_aarch64_unknown_linux_ohos="$NDK_LLVM/bin/llvm-ar"
+          export AR_x86_64_unknown_linux_ohos="$NDK_LLVM/bin/llvm-ar"
+          export RANLIB_aarch64_unknown_linux_ohos="$NDK_LLVM/bin/llvm-ranlib"
+          export RANLIB_x86_64_unknown_linux_ohos="$NDK_LLVM/bin/llvm-ranlib"
+
+          # 设置 CMAKE_TOOLCHAIN_FILE 给 aws-lc-sys
+          export CMAKE_TOOLCHAIN_FILE_aarch64_unknown_linux_ohos="$OHOS_NDK_HOME/build/cmake/ohos.toolchain.cmake"
+          export CMAKE_TOOLCHAIN_FILE_x86_64_unknown_linux_ohos="$OHOS_NDK_HOME/build/cmake/ohos.toolchain.cmake"
+
+          # 添加 llvm/bin 到 PATH
+          export PATH="$NDK_LLVM/bin:$PATH"
+
+          cargo +nightly build --release --target ${{ matrix.target }}
 
       - name: 📋 重命名产物
         run: |
-          SRC="target/${{ matrix.target }}/release/libTTHSD.so"
+          SRC="target/${{ matrix.target }}/release/libtthsd.so"
           DST="tthsd_harmony_${{ matrix.suffix }}.so"
           if [ -f "$SRC" ]; then
             cp "$SRC" "$DST"
             echo "产物: $DST ($(du -h "$DST" | cut -f1))"
           else
-            echo "⚠️  鸿蒙产物未生成，需要手动配置 OHOS NDK"
+            echo "⚠️  鸿蒙产物未生成"
+            exit 1
           fi
 
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: tthsd_harmony_${{ matrix.suffix }}.so
           path: tthsd_harmony_${{ matrix.suffix }}.so
           retention-days: 30
-          if-no-files-found: warn
 
   # ═══════════════════════════════════════════════════════════════
   #  测试 (Linux + macOS + Windows 原生)
