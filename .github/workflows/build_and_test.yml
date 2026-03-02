@@ -329,7 +329,11 @@ jobs:
           linker = "$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh"
           CARGO_CFG
 
-          # 设置 CC/CXX 环境变量让 aws-lc-sys/cmake 找到正确的编译器
+          # 设置 CC/CXX 环境变量（目标特定 + 全局）
+          # boring-sys2 的 cmake 不走 cc crate 约定，直接用系统 cc/c++
+          # 必须设全局 CC/CXX 指向 NDK clang（它自带 --target 支持）
+          export CC="$NDK_LLVM/bin/clang"
+          export CXX="$NDK_LLVM/bin/clang++"
           export CC_aarch64_unknown_linux_ohos="$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh"
           export CXX_aarch64_unknown_linux_ohos="$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang++.sh"
           export CC_x86_64_unknown_linux_ohos="$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh"
