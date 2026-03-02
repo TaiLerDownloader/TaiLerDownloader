@@ -312,22 +312,17 @@ jobs:
           WRAPPER
           chmod +x $HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang++.sh
 
-          # 配置 Cargo linker
+          # 配置 Cargo linker + ar（必须在同一个 section 内，不能 duplicate key）
           mkdir -p .cargo
-          cat > .cargo/config.toml << 'CARGO_CFG'
+          cat > .cargo/config.toml << CARGO_CFG
           [target.aarch64-unknown-linux-ohos]
           ar = "llvm-ar"
+          linker = "$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh"
 
           [target.x86_64-unknown-linux-ohos]
           ar = "llvm-ar"
+          linker = "$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh"
           CARGO_CFG
-
-          # 动态设置 linker 路径
-          echo "[target.aarch64-unknown-linux-ohos]" >> .cargo/config.toml
-          echo "linker = \"$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh\"" >> .cargo/config.toml
-          echo "" >> .cargo/config.toml
-          echo "[target.x86_64-unknown-linux-ohos]" >> .cargo/config.toml
-          echo "linker = \"$HOME/.ohos-wrappers/x86_64-unknown-linux-ohos-clang.sh\"" >> .cargo/config.toml
 
           # 设置 CC/CXX 环境变量让 aws-lc-sys/cmake 找到正确的编译器
           export CC_aarch64_unknown_linux_ohos="$HOME/.ohos-wrappers/aarch64-unknown-linux-ohos-clang.sh"
