@@ -20,6 +20,7 @@ import logging
 import platform
 import queue
 import sys
+import sysconfig
 import types
 import uuid
 from pathlib import Path
@@ -63,10 +64,28 @@ def _default_dll_name() -> str:
     """根据当前操作系统返回默认动态库文件名。"""
     system = platform.system()
     if system == "Windows":
+        if sys.maxsize > 2**32:
+            return "tthsd_arm64.dll"
         return "tthsd.dll"
     if system == "Darwin":
+        if sys.maxsize > 2**32:
+            return "tthsd_arm64.dylib"
         return "tthsd.dylib"
-    return "tthsd.so"
+    if system == "Linux":
+        if sys.maxsize > 2**32:
+            return "tthsd_arm64.so"
+        return "tthsd.so"
+    if system == "Android":
+        if sys.maxsize > 2**32:
+            if sysconfig.get_platform() == 'linux-x86_64':
+                return "tthsd_android_x86_64.so"
+            return "tthsd_android_arm64.so"
+        return "tthsd_android_armv7.so"
+    if system == "HarmonyOS":
+        if sys.maxsize > 2**32:
+            return "tthsd_harmony_arm64.so"
+        return "tthsd_harmony_x86_64.so"
+    raise OSError(f"不支持的操作系统: {system}")
 
 
 def _build_tasks_json(
@@ -146,7 +165,7 @@ class TTHSDownloader:
         if not dll_path.exists():
             raise FileNotFoundError(
                 f"动态库文件不存在 {dll_path}\n"
-                "请确保 libtthsd.so (Linux) / tthsd.dll (Windows) / libtthsd.dylib (macOS) "
+                "请确保 tthsd.so (Linux) / tthsd.dll (Windows) / tthsd.dylib (macOS) "
                 "位于执行目录，或通过 dll_path 参数显式指定路径。"
             )
 
