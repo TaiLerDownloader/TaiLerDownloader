@@ -59,32 +59,62 @@ _CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p)
 
 # Pylance/MyPy 兼容：不能暴漏 _CFuncPtr 给它们，因为它是类型检查器未知的 ctypes 内部类
 _CCallbackType = Any
-
 def _default_dll_name() -> str:
-    """根据当前操作系统返回默认动态库文件名。"""
+    """根据当前操作系统返回默认动态库文件名。
+    
+    TTHSD 默认只支持 64 位系统，且命名规则为：
+    - 桌面系统（ Windows, Linux, MacOS）是
+      - x86_64 架构使用默认名称（tthsd.*）
+      - ARM64 架构使用带后缀的名称（tthsd_arm64.*）
+    - Android 版本是
+      - tthsd_android_x86_64.so
+      - tthsd_android_arm64.so
+      - tthsd_android_armv7.so
+    - HarmonyOS 版本是
+      - tthsd_harmony_x86_64.so
+      - tthsd_harmony_arm64.so
+    """
     system = platform.system()
-    if system == "Windows":
-        if sys.maxsize > 2**32:
-            return "tthsd_arm64.dll"
-        return "tthsd.dll"
-    if system == "Darwin":
-        if sys.maxsize > 2**32:
-            return "tthsd_arm64.dylib"
-        return "tthsd.dylib"
-    if system == "Linux":
-        if sys.maxsize > 2**32:
-            return "tthsd_arm64.so"
-        return "tthsd.so"
-    if system == "Android":
-        if sys.maxsize > 2**32:
-            if sysconfig.get_platform() == 'linux-x86_64':
-                return "tthsd_android_x86_64.so"
-            return "tthsd_android_arm64.so"
-        return "tthsd_android_armv7.so"
-    if system == "HarmonyOS":
-        if sys.maxsize > 2**32:
+    machine = platform.machine().lower()
+    
+    # Android 特殊处理
+    if hasattr(sys, 'getandroidapilevel'):
+        android_map = {
+            ('x86_64', 'amd64'): "tthsd_android_x86_64.so",
+            ('arm64', 'aarch64'): "tthsd_android_arm64.so",
+            ('armv7', 'armv7l'): "tthsd_android_armv7.so",
+        }
+        for patterns, filename in android_map.items():
+            if machine in patterns:
+                return filename
+        raise OSError(f"不支持的 Android 架构: {machine}")
+    
+    # HarmonyOS 检测
+    is_harmony = (
+        system == "HarmonyOS" or 
+        (system == "Linux" and any(x in platform.version().lower() for x in ('harmony', 'ohos')))
+    )
+    if is_harmony:
+        if machine in ('arm64', 'aarch64'):
             return "tthsd_harmony_arm64.so"
         return "tthsd_harmony_x86_64.so"
+    
+    # 桌面系统
+    if system == "Windows":
+        if machine in ('arm64', 'aarch64'):
+            return "tthsd_arm64.dll"
+        return "tthsd.dll"
+    
+    if system == "Darwin":
+        if machine in ('arm64', 'aarch64'):
+            return "tthsd_arm64.dylib"
+        return "tthsd.dylib"
+    
+    if system == "Linux":
+        if machine in ('arm64', 'aarch64'):
+            return "tthsd_arm64.so"
+        return "tthsd.so"
+    
     raise OSError(f"不支持的操作系统: {system}")
 
 
