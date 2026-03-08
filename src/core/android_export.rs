@@ -2,17 +2,15 @@
 // 只有在编译 Android 版本时才会包含此模块
 
 #[cfg(feature = "android")]
-use jni::JNIEnv;
+use jni::EnvUnowned;
 #[cfg(feature = "android")]
-use jni::objects::{JClass, JString, JObject, JValue};
+use jni::objects::JClass;
 #[cfg(feature = "android")]
 use jni::sys::{jint, jboolean};
 #[cfg(feature = "android")]
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "android")]
 use std::collections::HashMap;
-#[cfg(feature = "android")]
-use std::ffi::CString;
 #[cfg(feature = "android")]
 use tokio::sync::RwLock;
 
@@ -60,20 +58,20 @@ fn get_downloader_id() -> &'static Mutex<i32> {
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownload<'local>(
-    mut env: jni::JNIEnv<'local>,
+    env: EnvUnowned<'local>,
     _class: JClass,
-    tasks_json: JString,
+    tasks_json: jni::objects::JString<'local>,
     thread_count: jint,
     chunk_size_mb: jint,
     use_callback_url: jboolean,
-    callback_url: JString,
+    callback_url: jni::objects::JString<'local>,
     use_socket: jboolean,
     is_multiple: jboolean,
 ) -> jint {
-    // 转换 JSON 字符串
-    let tasks_str: String = match env.get_string(&tasks_json) {
-        Ok(s) => String::from(s),
-        Err(_) => return -1,
+    // 使用 with_env 获取 Env 引用以调用 get_string
+    let tasks_str: String = match env.with_env(|env| env.get_string(&tasks_json)) {
+        Ok(Ok(s)) => String::from(s),
+        _ => return -1,
     };
 
     let tasks_json_str = tasks_str;
@@ -89,9 +87,9 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownload<'local>(
 
     // 获取回调 URL
     let cb_url = if use_callback_url != jni::sys::JNI_FALSE {
-        let url: String = match env.get_string(&callback_url) {
-            Ok(s) => String::from(s),
-            Err(_) => return -1,
+        let url: String = match env.with_env(|env| env.get_string(&callback_url)) {
+            Ok(Ok(s)) => String::from(s),
+            _ => return -1,
         };
         if !url.is_empty() { Some(url) } else { None }
     } else {
@@ -160,18 +158,18 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownload<'local>(
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_getDownloader<'local>(
-    mut env: jni::JNIEnv<'local>,
+    env: EnvUnowned<'local>,
     _class: JClass,
-    tasks_json: JString,
+    tasks_json: jni::objects::JString<'local>,
     thread_count: jint,
     chunk_size_mb: jint,
     use_callback_url: jboolean,
-    callback_url: JString,
+    callback_url: jni::objects::JString<'local>,
     use_socket: jboolean,
 ) -> jint {
-    let tasks_str: String = match env.get_string(&tasks_json) {
-        Ok(s) => String::from(s),
-        Err(_) => return -1,
+    let tasks_str: String = match env.with_env(|env| env.get_string(&tasks_json)) {
+        Ok(Ok(s)) => String::from(s),
+        _ => return -1,
     };
 
     let tasks_json_str = tasks_str;
@@ -182,9 +180,9 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_getDownloader<'local>(
     };
 
     let cb_url = if use_callback_url != jni::sys::JNI_FALSE {
-        let url: String = match env.get_string(&callback_url) {
-            Ok(s) => String::from(s),
-            Err(_) => return -1,
+        let url: String = match env.with_env(|env| env.get_string(&callback_url)) {
+            Ok(Ok(s)) => String::from(s),
+            _ => return -1,
         };
         if !url.is_empty() { Some(url) } else { None }
     } else {
@@ -223,7 +221,7 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_getDownloader<'local>(
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownloadById<'local>(
-    _env: jni::JNIEnv<'local>,
+    _env: EnvUnowned<'local>,
     _class: JClass,
     id: jint,
 ) -> jint {
@@ -268,7 +266,7 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownloadById<'local>(
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startMultipleDownloadsById<'local>(
-    _env: jni::JNIEnv<'local>,
+    _env: EnvUnowned<'local>,
     _class: JClass,
     id: jint,
 ) -> jint {
@@ -313,7 +311,7 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startMultipleDownloadsById<'local>
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_pauseDownload<'local>(
-    _env: jni::JNIEnv<'local>,
+    _env: EnvUnowned<'local>,
     _class: JClass,
     id: jint,
 ) -> jint {
@@ -336,7 +334,7 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_pauseDownload<'local>(
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_resumeDownload<'local>(
-    _env: jni::JNIEnv<'local>,
+    _env: EnvUnowned<'local>,
     _class: JClass,
     id: jint,
 ) -> jint {
@@ -362,7 +360,7 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_resumeDownload<'local>(
 #[cfg(feature = "android")]
 #[unsafe(no_mangle)]
 pub extern "C" fn Java_com_tthsd_TTHSDLibrary_stopDownload<'local>(
-    _env: jni::JNIEnv<'local>,
+    _env: EnvUnowned<'local>,
     _class: JClass,
     id: jint,
 ) -> jint {
