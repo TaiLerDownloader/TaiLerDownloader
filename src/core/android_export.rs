@@ -41,6 +41,12 @@ fn get_downloader_id() -> &'static Mutex<i32> {
     &DOWNLOADER_ID
 }
 
+/// 从 JString 获取 String (jni 0.22 新 API)
+#[cfg(feature = "android")]
+fn jstring_to_string(env: EnvUnowned<'_>, jstr: &jni::objects::JString<'_>) -> Option<String> {
+    env.with_env(|e| jstr.to_string(e)).ok().flatten()
+}
+
 /// JNI 函数: 启动下载任务
 /// 
 /// 参数说明:
@@ -68,10 +74,10 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownload<'local>(
     use_socket: jboolean,
     is_multiple: jboolean,
 ) -> jint {
-    // 使用 with_env 获取 Env 引用以调用 get_string
-    let tasks_str: String = match env.with_env(|env| env.get_string(&tasks_json)) {
-        Ok(Ok(s)) => String::from(s),
-        _ => return -1,
+    // 转换 JSON 字符串
+    let tasks_str: String = match jstring_to_string(env, &tasks_json) {
+        Some(s) => s,
+        None => return -1,
     };
 
     let tasks_json_str = tasks_str;
@@ -87,11 +93,10 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownload<'local>(
 
     // 获取回调 URL
     let cb_url = if use_callback_url != jni::sys::JNI_FALSE {
-        let url: String = match env.with_env(|env| env.get_string(&callback_url)) {
-            Ok(Ok(s)) => String::from(s),
+        match jstring_to_string(env, &callback_url) {
+            Some(url) if !url.is_empty() => Some(url),
             _ => return -1,
-        };
-        if !url.is_empty() { Some(url) } else { None }
+        }
     } else {
         None
     };
@@ -167,9 +172,9 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_getDownloader<'local>(
     callback_url: jni::objects::JString<'local>,
     use_socket: jboolean,
 ) -> jint {
-    let tasks_str: String = match env.with_env(|env| env.get_string(&tasks_json)) {
-        Ok(Ok(s)) => String::from(s),
-        _ => return -1,
+    let tasks_str: String = match jstring_to_string(env, &tasks_json) {
+        Some(s) => s,
+        None => return -1,
     };
 
     let tasks_json_str = tasks_str;
@@ -180,11 +185,10 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_getDownloader<'local>(
     };
 
     let cb_url = if use_callback_url != jni::sys::JNI_FALSE {
-        let url: String = match env.with_env(|env| env.get_string(&callback_url)) {
-            Ok(Ok(s)) => String::from(s),
+        match jstring_to_string(env, &callback_url) {
+            Some(url) if !url.is_empty() => Some(url),
             _ => return -1,
-        };
-        if !url.is_empty() { Some(url) } else { None }
+        }
     } else {
         None
     };
