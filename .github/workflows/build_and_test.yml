@@ -166,12 +166,11 @@ jobs:
         run: cargo install cargo-ndk
 
       - name: 🏗️ 编译 Android 库
-        env:
-          # GitHub Actions runner 环境变量名是 ANDROID_NDK_LATEST_HOME
-          # boring-sys2 和 aws-lc-sys 需要 ANDROID_NDK_HOME
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
+          # GitHub Actions runner 的系统环境变量是 ANDROID_NDK_LATEST_HOME
+          # boring-sys2 和 aws-lc-sys 需要 ANDROID_NDK_HOME
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
           ls "$ANDROID_NDK_HOME" | head -5
           cargo ndk \
