@@ -34,21 +34,63 @@
 #include <cstring>
 #include <nlohmann/json.hpp>
 
+/*
+ * TTHSD 动态库默认文件名（编译期决定）
+ *
+ * 命名规则:
+ *   桌面: x86_64 → tthsd.*, arm64 → tthsd_arm64.*
+ *   Android: tthsd_android_{arm64,armv7,x86_64}.so
+ *   HarmonyOS: tthsd_harmony_{arm64,x86_64}.so
+ */
 #ifdef _WIN32
   #include <windows.h>
   #define TTHSD_LIB_OPEN(p)    LoadLibraryA(p)
   #define TTHSD_LIB_SYM(h, s)  GetProcAddress((HMODULE)(h), s)
   #define TTHSD_LIB_CLOSE(h)   FreeLibrary((HMODULE)(h))
-  #define TTHSD_DEFAULT_LIB    "tthsd.dll"
+  #if defined(_M_ARM64) || defined(__aarch64__)
+    #define TTHSD_DEFAULT_LIB  "tthsd_arm64.dll"
+  #else
+    #define TTHSD_DEFAULT_LIB  "tthsd.dll"
+  #endif
+#elif defined(__ANDROID__)
+  #include <dlfcn.h>
+  #define TTHSD_LIB_OPEN(p)    dlopen(p, RTLD_LAZY)
+  #define TTHSD_LIB_SYM(h, s)  dlsym(h, s)
+  #define TTHSD_LIB_CLOSE(h)   dlclose(h)
+  #if defined(__aarch64__)
+    #define TTHSD_DEFAULT_LIB  "tthsd_android_arm64.so"
+  #elif defined(__arm__)
+    #define TTHSD_DEFAULT_LIB  "tthsd_android_armv7.so"
+  #else
+    #define TTHSD_DEFAULT_LIB  "tthsd_android_x86_64.so"
+  #endif
+#elif defined(__OHOS__)
+  #include <dlfcn.h>
+  #define TTHSD_LIB_OPEN(p)    dlopen(p, RTLD_LAZY)
+  #define TTHSD_LIB_SYM(h, s)  dlsym(h, s)
+  #define TTHSD_LIB_CLOSE(h)   dlclose(h)
+  #if defined(__aarch64__)
+    #define TTHSD_DEFAULT_LIB  "tthsd_harmony_arm64.so"
+  #else
+    #define TTHSD_DEFAULT_LIB  "tthsd_harmony_x86_64.so"
+  #endif
 #else
   #include <dlfcn.h>
   #define TTHSD_LIB_OPEN(p)    dlopen(p, RTLD_LAZY)
   #define TTHSD_LIB_SYM(h, s)  dlsym(h, s)
   #define TTHSD_LIB_CLOSE(h)   dlclose(h)
   #ifdef __APPLE__
-    #define TTHSD_DEFAULT_LIB  "libtthsd.dylib"
+    #if defined(__aarch64__)
+      #define TTHSD_DEFAULT_LIB  "tthsd_arm64.dylib"
+    #else
+      #define TTHSD_DEFAULT_LIB  "tthsd.dylib"
+    #endif
   #else
-    #define TTHSD_DEFAULT_LIB  "libtthsd.so"
+    #if defined(__aarch64__)
+      #define TTHSD_DEFAULT_LIB  "tthsd_arm64.so"
+    #else
+      #define TTHSD_DEFAULT_LIB  "tthsd.so"
+    #endif
   #endif
 #endif
 

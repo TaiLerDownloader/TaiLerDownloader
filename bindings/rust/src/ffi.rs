@@ -48,10 +48,27 @@ impl TthsdRaw {
         Ok(raw)
     }
 
-    /// 根据操作系统返回默认动态库文件名
+    /// 根据操作系统和 CPU 架构返回默认动态库文件名
+    ///
+    /// TTHSD 命名规则:
+    ///   桌面: x86_64 → tthsd.*, arm64 → tthsd_arm64.*
+    ///   Android: tthsd_android_{arm64,armv7,x86_64}.so
+    ///   HarmonyOS: tthsd_harmony_{arm64,x86_64}.so
     pub fn default_lib_name() -> &'static str {
-        #[cfg(target_os = "windows")]  { "tthsd.dll"    }
-        #[cfg(target_os = "macos")]    { "libtthsd.dylib"  }
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))] { "libtthsd.so" }
+        #[cfg(all(target_os = "android", target_arch = "aarch64"))]   { "tthsd_android_arm64.so"  }
+        #[cfg(all(target_os = "android", target_arch = "arm"))]       { "tthsd_android_armv7.so"  }
+        #[cfg(all(target_os = "android", not(any(target_arch = "aarch64", target_arch = "arm"))))]
+                                                                      { "tthsd_android_x86_64.so" }
+
+        #[cfg(all(target_os = "windows", target_arch = "aarch64"))]   { "tthsd_arm64.dll"    }
+        #[cfg(all(target_os = "windows", not(target_arch = "aarch64")))] { "tthsd.dll"        }
+
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]     { "tthsd_arm64.dylib"  }
+        #[cfg(all(target_os = "macos", not(target_arch = "aarch64")))] { "tthsd.dylib"       }
+
+        #[cfg(all(not(any(target_os = "windows", target_os = "macos", target_os = "android")),
+                  target_arch = "aarch64"))]                          { "tthsd_arm64.so"     }
+        #[cfg(all(not(any(target_os = "windows", target_os = "macos", target_os = "android")),
+                  not(target_arch = "aarch64")))]                     { "tthsd.so"           }
     }
 }

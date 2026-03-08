@@ -21,13 +21,40 @@ object NativeLibraryLoader {
     private val osName: String = System.getProperty("os.name").lowercase()
     private val archName: String = System.getProperty("os.arch").lowercase()
 
-    /** 动态库文件名（根据 OS 自动选择） */
+    /**
+     * 动态库文件名（根据 OS + CPU 架构自动选择）
+     *
+     * TTHSD 命名规则:
+     *   桌面: x86_64 → tthsd.*, arm64 → tthsd_arm64.*
+     *   Android: tthsd_android_{arm64,armv7,x86_64}.so
+     *   HarmonyOS: tthsd_harmony_{arm64,x86_64}.so
+     */
     val libFileName: String
-        get() = when {
-            osName.contains("win")   -> "tthsd.dll"
-            osName.contains("mac")   -> "tthsd.dylib"
-            osName.contains("android")   -> "tthsd_android.so"
-            else                     -> "tthsd.so"
+        get() {
+            val isArm64 = archName.contains("aarch64") || archName.contains("arm64")
+            val isArm32 = !isArm64 && archName.contains("arm")
+
+            // Android
+            if (osName.contains("android") || System.getProperty("java.vm.vendor")?.lowercase()?.contains("android") == true) {
+                return when {
+                    isArm64 -> "tthsd_android_arm64.so"
+                    isArm32 -> "tthsd_android_armv7.so"
+                    else    -> "tthsd_android_x86_64.so"
+                }
+            }
+
+            // HarmonyOS
+            val osVersion = System.getProperty("os.version")?.lowercase() ?: ""
+            if (osName.contains("harmony") || osVersion.contains("ohos") || osVersion.contains("harmony")) {
+                return if (isArm64) "tthsd_harmony_arm64.so" else "tthsd_harmony_x86_64.so"
+            }
+
+            // 桌面系统
+            return when {
+                osName.contains("win") -> if (isArm64) "tthsd_arm64.dll" else "tthsd.dll"
+                osName.contains("mac") -> if (isArm64) "tthsd_arm64.dylib" else "tthsd.dylib"
+                else                   -> if (isArm64) "tthsd_arm64.so" else "tthsd.so"
+            }
         }
 
     /** OS 分类标识（对应 JAR 内路径 /native/<osKey>/） */

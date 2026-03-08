@@ -120,15 +120,45 @@ type nativeLib struct {
 	fnStopDownload           unsafe.Pointer
 }
 
-// defaultLibName 根据操作系统返回默认动态库文件名
+// defaultLibName 根据操作系统和 CPU 架构返回默认动态库文件名。
+//
+// TTHSD 命名规则:
+//   桌面: x86_64 → tthsd.*, arm64 → tthsd_arm64.*
+//   Android: tthsd_android_{arm64,armv7,x86_64}.so
+//   HarmonyOS: tthsd_harmony_{arm64,x86_64}.so
 func defaultLibName() string {
+	arch := runtime.GOARCH // amd64, arm64, arm, etc.
+
 	switch runtime.GOOS {
+	case "android":
+		switch arch {
+		case "arm64":
+			return "tthsd_android_arm64.so"
+		case "arm":
+			return "tthsd_android_armv7.so"
+		default: // amd64
+			return "tthsd_android_x86_64.so"
+		}
+
 	case "windows":
+		if arch == "arm64" {
+			return "tthsd_arm64.dll"
+		}
 		return "tthsd.dll"
+
 	case "darwin":
-		return "libtthsd.dylib"
-	default:
-		return "libtthsd.so"
+		if arch == "arm64" {
+			return "tthsd_arm64.dylib"
+		}
+		return "tthsd.dylib"
+
+	default: // linux 和其它
+		// HarmonyOS 也是 linux，但 runtime.GOOS 无法区分，
+		// 鸿蒙环境请通过参数显式指定库路径。
+		if arch == "arm64" {
+			return "tthsd_arm64.so"
+		}
+		return "tthsd.so"
 	}
 }
 

@@ -17,13 +17,30 @@ import { DownloadCallback, DownloadEvent, CallbackData } from "./types";
 // ------------------------------------------------------------------
 
 /**
- * 根据当前操作系统决定动态库文件名。
+ * 根据当前操作系统和 CPU 架构决定动态库文件名。
+ *
+ * TTHSD 命名规则:
+ *   桌面: x86_64 → tthsd.*, arm64 → tthsd_arm64.*
+ *   Android: tthsd_android_{arm64,armv7,x86_64}.so
+ *   HarmonyOS: tthsd_harmony_{arm64,x86_64}.so
  */
 function getDefaultLibName(): string {
+  const arch = process.arch; // x64, arm64, arm, ia32, etc.
+
+  // Android 检测（如 Termux 等）
+  if (process.platform === "android") {
+    if (arch === "arm64") return "tthsd_android_arm64.so";
+    if (arch === "arm")   return "tthsd_android_armv7.so";
+    return "tthsd_android_x86_64.so";
+  }
+
   switch (process.platform) {
-    case "win32":  return "tthsd.dll";
-    case "darwin": return "libtthsd.dylib";
-    default:       return "libtthsd.so";
+    case "win32":
+      return arch === "arm64" ? "tthsd_arm64.dll" : "tthsd.dll";
+    case "darwin":
+      return arch === "arm64" ? "tthsd_arm64.dylib" : "tthsd.dylib";
+    default: // linux
+      return arch === "arm64" ? "tthsd_arm64.so" : "tthsd.so";
   }
 }
 

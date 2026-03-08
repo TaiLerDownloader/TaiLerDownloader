@@ -3,22 +3,61 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
-// 跨平台动态库加载
+/*
+ * TTHSD 动态库默认文件名（编译期决定）
+ * 命名规则: 桌面 x86_64→tthsd.*, arm64→tthsd_arm64.*
+ *          Android: tthsd_android_{arm64,armv7,x86_64}.so
+ *          HarmonyOS: tthsd_harmony_{arm64,x86_64}.so
+ */
 #ifdef _WIN32
   #include <windows.h>
   #define TTHSD_OPEN_LIB(path)  LoadLibraryA(path)
   #define TTHSD_GET_SYM(h, sym) GetProcAddress((HMODULE)(h), sym)
   #define TTHSD_CLOSE_LIB(h)    FreeLibrary((HMODULE)(h))
-  #define TTHSD_DEFAULT_LIB     "tthsd.dll"
+  #if defined(_M_ARM64) || defined(__aarch64__)
+    #define TTHSD_DEFAULT_LIB   "tthsd_arm64.dll"
+  #else
+    #define TTHSD_DEFAULT_LIB   "tthsd.dll"
+  #endif
+#elif defined(__ANDROID__)
+  #include <dlfcn.h>
+  #define TTHSD_OPEN_LIB(path)  dlopen(path, RTLD_LAZY)
+  #define TTHSD_GET_SYM(h, sym) dlsym(h, sym)
+  #define TTHSD_CLOSE_LIB(h)    dlclose(h)
+  #if defined(__aarch64__)
+    #define TTHSD_DEFAULT_LIB   "tthsd_android_arm64.so"
+  #elif defined(__arm__)
+    #define TTHSD_DEFAULT_LIB   "tthsd_android_armv7.so"
+  #else
+    #define TTHSD_DEFAULT_LIB   "tthsd_android_x86_64.so"
+  #endif
+#elif defined(__OHOS__)
+  #include <dlfcn.h>
+  #define TTHSD_OPEN_LIB(path)  dlopen(path, RTLD_LAZY)
+  #define TTHSD_GET_SYM(h, sym) dlsym(h, sym)
+  #define TTHSD_CLOSE_LIB(h)    dlclose(h)
+  #if defined(__aarch64__)
+    #define TTHSD_DEFAULT_LIB   "tthsd_harmony_arm64.so"
+  #else
+    #define TTHSD_DEFAULT_LIB   "tthsd_harmony_x86_64.so"
+  #endif
 #else
   #include <dlfcn.h>
   #define TTHSD_OPEN_LIB(path)  dlopen(path, RTLD_LAZY)
   #define TTHSD_GET_SYM(h, sym) dlsym(h, sym)
   #define TTHSD_CLOSE_LIB(h)    dlclose(h)
   #ifdef __APPLE__
-    #define TTHSD_DEFAULT_LIB   "libtthsd.dylib"
+    #if defined(__aarch64__)
+      #define TTHSD_DEFAULT_LIB "tthsd_arm64.dylib"
+    #else
+      #define TTHSD_DEFAULT_LIB "tthsd.dylib"
+    #endif
   #else
-    #define TTHSD_DEFAULT_LIB   "libtthsd.so"
+    #if defined(__aarch64__)
+      #define TTHSD_DEFAULT_LIB "tthsd_arm64.so"
+    #else
+      #define TTHSD_DEFAULT_LIB "tthsd.so"
+    #endif
   #endif
 #endif
 
