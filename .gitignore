@@ -23,6 +23,7 @@ target/
 Cargo.lock
 .*/
 .*
+.gradle/
 *.lock
 
 

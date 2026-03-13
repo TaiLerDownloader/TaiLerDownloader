@@ -6,6 +6,8 @@
   <img src="https://img.shields.io/badge/License-GPL--3.0-green.svg" alt="License">
 </div>
 
+> Copyright © 2026 - present 23XRStudio 保留所有权利
+
 ## 概述
 
 **TTHSD 核心**（TT High Speed Downloader Core）是一个高性能、跨平台、多语言可调用的下载引擎内核，可为外部项目提供强大的下载能力支持，使开发者能够在自己的应用中轻松集成专业级的文件下载功能。该项目使用 **Rust** 语言开发，编译为 DLL/SO/DYLIB 动态库，供全语言原生调用。
@@ -156,4 +158,4 @@ cargo ndk --target arm64-v8a --platform 21 build --release --features android
 
 ## 📄 协议
 
-本项目基于 **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)** 协议开源。这保证了核心底层下载软件始终维持开源与自由复制分发的权利，对代码的任意修改也请务必同等以 GPL 协议开源并向社区开放。
+本项目基于 **[GNU Affero General Public License v3.0 (GPL-3.0)](LICENSE)** 协议开源。这保证了核心底层下载软件始终维持开源与自由复制分发的权利，对代码的任意修改也请务必同等以 GPL 协议开源并向社区开放。
