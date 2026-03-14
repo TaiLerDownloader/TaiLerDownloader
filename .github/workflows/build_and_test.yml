@@ -112,19 +112,34 @@ jobs:
           cp "$SRC" "$DST"
           echo "产物: $DST ($(du -h "$DST" | cut -f1))"
 
-      - name: 🔧 安装 UPX (Linux/Windows)
-        if: runner.os != 'macOS'
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get update && sudo apt-get install -y upx
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            choco install upx
-          fi
+      # 安装 UPX 并压缩 Windows x64
+      - name: 🔧 安装 UPX (Windows x64)
+        if: runner.os == 'Windows' && matrix.target == 'x86_64-pc-windows-msvc'
+        run: choco install upx
 
-      - name: 📦 使用 UPX 压缩产物 (Linux/Windows)
-        if: runner.os != 'macOS'
+      - name: 📦 使用 UPX 压缩 Windows x64 产物
+        if: runner.os == 'Windows' && matrix.target == 'x86_64-pc-windows-msvc'
         run: upx --best --lzma ${{ matrix.artifact_name }}
 
+      # 安装 LLVM 并使用 llvm-strip 处理 Windows ARM64
+      - name: 🔧 安装 LLVM (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.target == 'aarch64-pc-windows-msvc'
+        run: choco install llvm
+
+      - name: 🔪 使用 llvm-strip 减小 Windows ARM64 体积
+        if: runner.os == 'Windows' && matrix.target == 'aarch64-pc-windows-msvc'
+        run: llvm-strip ${{ matrix.artifact_name }}
+
+      # Linux 平台（所有架构）使用 UPX
+      - name: 🔧 安装 UPX (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y upx
+
+      - name: 📦 使用 UPX 压缩 Linux 产物
+        if: runner.os == 'Linux'
+        run: upx --best --lzma ${{ matrix.artifact_name }}
+
+      # macOS 使用 strip
       - name: 🔪 使用 strip 减小 macOS 体积
         if: runner.os == 'macOS'
         run: strip ${{ matrix.artifact_name }}
