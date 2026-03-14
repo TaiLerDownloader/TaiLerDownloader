@@ -16,11 +16,16 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 async-trait = "0.1"
 num_cpus = "1.16"
-tokio-util = "0.7"
-futures = "0.3.32"
-once_cell = "1.21.3"
-suppaftp = { version = "8.0", features = ["tokio"] }
-url = "2"
+# tokio-util = "0.7"
+# tokio-util = { version = "0.7", default-features = false, features = ["sync"] }
+tokio-util = { version = "0.7", default-features = false, features = ["slab"] }  # 或者直接使用默认特性
+# futures = "0.3.32"
+futures = { version = "0.3.32", default-features = false, features = ["async-await", "executor"] }
+once_cell = "1.21.4"
+# suppaftp = { version = "8.0", features = ["tokio"] }
+suppaftp = { version = "8.0", default-features = false, features = ["tokio"] }
+# url = "2"
+url = { version = "2", default-features = false }
 jni = { version = "0.22.3", optional = true }
 lazy_static = "1.5.0"
 librqbit = { version = "8.1", default-features = false, features = ["rust-tls"] }
@@ -30,9 +35,12 @@ h3-quinn = "0.0.10"
 quinn = { version = "0.11", default-features = false, features = ["rustls"] }
 rustls = { version = "0.23.37", default-features = false, features = ["ring"] }
 webpki-roots = "1.0.6"
-bytes = "1"
-http = "1"
-russh = { version = "0.57.1", default-features = false, features = ["aws-lc-rs", "rsa"] }
+# bytes = "1"
+# http = "1"
+bytes = { version = "1", default-features = false }
+http = { version = "1", default-features = false }
+# russh = { version = "0.57.1", default-features = false, features = ["aws-lc-rs", "rsa"] }
+russh = { version = "0.57.1", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = { version = "2.0", default-features = false }
 
 [features]
@@ -40,7 +48,7 @@ default = []
 android = ["jni"]
 
 [profile.release]
-lto = true                # 链接时优化，消除死代码
-codegen-units = 1         # 单代码生成单元，利于优化
-strip = "symbols"         # 自动剥离调试符号（Rust 1.59+）
-opt-level = "z"           # 优化大小（可选，也可保留默认的3）
+lto = true
+codegen-units = 1
+strip = "symbols"
+opt-level = "z"

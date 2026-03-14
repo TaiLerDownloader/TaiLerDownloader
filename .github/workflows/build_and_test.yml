@@ -112,6 +112,19 @@ jobs:
           cp "$SRC" "$DST"
           echo "产物: $DST ($(du -h "$DST" | cut -f1))"
 
+      - name: 🔧 安装 UPX (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y upx
+      - name: 🔧 安装 UPX (macOS)
+        if: runner.os == 'macOS'
+        run: brew install upx
+      - name: 🔧 安装 UPX (Windows)
+        if: runner.os == 'Windows'
+        run: choco install upx
+
+      - name: 📦 使用 UPX 压缩产物
+        run: upx --best --lzma ${{ matrix.artifact_name }}
+
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
         with:
@@ -184,6 +197,14 @@ jobs:
           DST="tthsd_android_${{ matrix.suffix }}.so"
           cp "$SRC" "$DST"
           echo "产物: $DST ($(du -h "$DST" | cut -f1))"
+
+      - name: 🔧 安装 UPX (Android 构建环境)
+        run: sudo apt-get update && sudo apt-get install -y upx
+
+      - name: 📦 使用 UPX 压缩产物
+        run: |
+          ARTIFACT="tthsd_android_${{ matrix.suffix }}.so"
+          upx --best --lzma "$ARTIFACT"
 
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
@@ -444,6 +465,14 @@ jobs:
             echo "⚠️  鸿蒙产物未生成"
             exit 1
           fi
+
+      - name: 🔧 安装 UPX (HarmonyOS 构建环境)
+        run: sudo apt-get update && sudo apt-get install -y upx
+
+      - name: 📦 使用 UPX 压缩产物
+        run: |
+          ARTIFACT="tthsd_harmony_${{ matrix.suffix }}.so"
+          upx --best --lzma "$ARTIFACT"
 
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
