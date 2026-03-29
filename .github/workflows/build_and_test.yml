@@ -220,7 +220,7 @@ jobs:
 
       - name: 📋 重命名产物
         run: |
-          SRC="target/${{ matrix.target }}/release/libTTHSD.so"
+          SRC="target/${{ matrix.target }}/release/libtthsd.so"
           DST="tthsd_android_${{ matrix.suffix }}.so"
           cp "$SRC" "$DST"
           echo "产物: $DST ($(du -h "$DST" | cut -f1))"
