@@ -201,7 +201,8 @@ jobs:
           # iOS 需要 apple-sdk，macOS runner 自带
           # 使用 NO_LTO 减少编译时间，iOS 不需要极致优化
           # 设置 iOS 13.0 最低版本以修复 zstd 链接问题
-          export RUSTFLAGS="-C link-arg=-Wl,-dead_strip -C mios-version-min=13.0"
+          export RUSTFLAGS="-C link-arg=-Wl,-dead_strip"
+          export IPHONEOS_DEPLOYMENT_TARGET=13.0
           cargo build --release --target ${{ matrix.target }}
 
       - name: 📋 重命名产物
