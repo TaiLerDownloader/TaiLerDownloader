@@ -200,7 +200,8 @@ jobs:
         run: |
           # iOS 需要 apple-sdk，macOS runner 自带
           # 使用 NO_LTO 减少编译时间，iOS 不需要极致优化
-          export RUSTFLAGS="-C link-arg=-Wl,-dead_strip"
+          # 设置 iOS 13.0 最低版本以修复 zstd 链接问题
+          export RUSTFLAGS="-C link-arg=-Wl,-dead_strip -C link-arg=-mios-version_min=13.0"
           cargo build --release --target ${{ matrix.target }}
 
       - name: 📋 重命名产物
@@ -681,7 +682,6 @@ jobs:
           mkdir -p release_pkg/ios
           cp artifacts/tthsd_ios_arm64_device.dylib/tthsd_ios_arm64_device.dylib release_pkg/ios/ 2>/dev/null || true
           cp artifacts/tthsd_ios_arm64_simulator.dylib/tthsd_ios_arm64_simulator.dylib release_pkg/ios/ 2>/dev/null || true
-          cp artifacts/tthsd_ios_x86_64_simulator.dylib/tthsd_ios_x86_64_simulator.dylib release_pkg/ios/ 2>/dev/null || true
 
           # 鸿蒙
           mkdir -p release_pkg/harmony
