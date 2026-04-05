@@ -122,6 +122,12 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_startDownload<'local>(
         use_socket: if use_socket != jni::sys::JNI_FALSE { Some(true) } else { None },
         show_name: String::new(),
         user_agent: UA.to_string(),
+        max_retries: 3,
+        retry_delay_ms: 1000,
+        max_retry_delay_ms: 30000,
+        speed_limit_bps: 0,
+        proxy_url: None,
+        headers: std::collections::HashMap::new(),
     };
 
     let downloader = Arc::new(RwLock::new(HSDownloader::new(config)));
@@ -214,6 +220,12 @@ pub extern "C" fn Java_com_tthsd_TTHSDLibrary_getDownloader<'local>(
         use_socket: if use_socket != jni::sys::JNI_FALSE { Some(true) } else { None },
         show_name: String::new(),
         user_agent: UA.to_string(),
+        max_retries: 3,
+        retry_delay_ms: 1000,
+        max_retry_delay_ms: 30000,
+        speed_limit_bps: 0,
+        proxy_url: None,
+        headers: std::collections::HashMap::new(),
     };
 
     let downloader = Arc::new(RwLock::new(HSDownloader::new(config)));

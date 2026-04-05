@@ -173,8 +173,6 @@ jobs:
             suffix: arm64_device
           - target: aarch64-apple-ios-sim
             suffix: arm64_simulator
-          - target: x86_64-apple-ios-sim
-            suffix: x86_64_simulator
 
     steps:
       - name: 📥 检出代码
