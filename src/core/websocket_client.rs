@@ -170,7 +170,7 @@ impl WebSocketClient {
         let data_bytes = match serde_json::to_string(&data) {
             Ok(bytes) => bytes,
             Err(e) => {
-                eprintln!("序列化额外数据失败: {:?}", e);
+                eprintln!("序列化额外数据失�? {:?}", e);
                 return;
             }
         };
@@ -183,7 +183,7 @@ impl WebSocketClient {
         let json_data = match serde_json::to_string(&message) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("序列化消息失败: {:?}", e);
+                eprintln!("序列化消息失�? {:?}", e);
                 return;
             }
         };

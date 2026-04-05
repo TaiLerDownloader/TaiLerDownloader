@@ -4,18 +4,17 @@ use tokio::sync::RwLock;
 use super::downloader_interface::{Downloader, BaseDownloader};
 use super::downloader::{DownloadTask, DownloadConfig};
 use super::performance_monitor::PerformanceMonitor;
+use super::file_utils::create_download_file;
 
-/// ED2K 下载器
-///
-/// 解析 ed2k://|file|<name>|<size>|<hash>|/ 格式的链接
-/// 通过公共 HTTP 网关将 ED2K 转为 HTTP 下载
-/// 使用网关: https://ed2k.lyoko.io/hash/<hash>
+/// ED2K downloader implementation
+/// Parses ed2k://|file|<name>|<size>|<hash>|/ format URLs
+/// Converts ED2K to HTTP via public gateway: https://ed2k.lyoko.io/hash/<hash>
 pub struct ED2KDownloader {
     base: BaseDownloader,
     monitor: Option<Arc<PerformanceMonitor>>,
 }
 
-/// 解析后的 ED2K 链接信息
+/// Parsed ED2K link info
 struct Ed2kInfo {
     name: String,
     size: u64,
@@ -35,45 +34,45 @@ impl ED2KDownloader {
         }
     }
 
-    /// 解析 ed2k:// URL
-    /// 格式: ed2k://|file|<filename>|<filesize>|<md4hash>|/
+    /// Parse ed2k:// URL
+    /// Format: ed2k://|file|<filename>|<filesize>|<md4hash>|/
     fn parse_ed2k_url(url: &str) -> Result<Ed2kInfo, String> {
-        // 去掉 ed2k:// 前缀
+        // Remove ed2k:// prefix
         let stripped = url.strip_prefix("ed2k://")
-            .ok_or("不是有效的 ed2k:// URL")?;
+            .ok_or("Invalid ed2k:// URL")?;
 
-        // 按 | 分割: ["", "file", name, size, hash, "", ""]
+        // Split by |: ["", "file", name, size, hash, "", ""]
         let parts: Vec<&str> = stripped.split('|').collect();
 
         if parts.len() < 5 {
-            return Err(format!("ED2K URL 格式错误，分段数量不足: {}", url));
+            return Err(format!("Invalid ED2K URL format, insufficient parts: {}", url));
         }
 
-        // 检查类型（目前只支持 file）
+        // Check type (currently only supports 'file')
         if parts[1] != "file" {
-            return Err(format!("不支持的 ED2K 类型: '{}' (仅支持 file)", parts[1]));
+            return Err(format!("Unsupported ED2K type: '{}' (only 'file' supported)", parts[1]));
         }
 
         let _name = url::form_urlencoded::parse(parts[2].as_bytes())
             .next()
             .map(|(k, _)| k.into_owned())
             .unwrap_or_else(|| parts[2].to_string());
-        // 简单的 URL decode（文件名可能被 % 编码）
+        // Simple URL decode (filename may have % encoding)
         let name = percent_decode(parts[2]);
 
         let size: u64 = parts[3].parse()
-            .map_err(|_| format!("ED2K 文件大小解析失败: '{}'", parts[3]))?;
+            .map_err(|_| format!("Failed to parse ED2K file size: '{}'", parts[3]))?;
 
         let hash = parts[4].to_string();
         if hash.len() != 32 {
-            return Err(format!("ED2K hash 长度不正确: {} (应为 32)", hash.len()));
+            return Err(format!("Invalid ED2K hash length: {} (should be 32)", hash.len()));
         }
 
         Ok(Ed2kInfo { name, size, hash })
     }
 }
 
-/// 简单的 URL percent-decode（仅处理 %XX 序列）
+/// Simple URL percent-decode (handles %XX sequences only)
 fn percent_decode(s: &str) -> String {
     let mut result = String::new();
     let bytes = s.as_bytes();
@@ -98,35 +97,35 @@ fn percent_decode(s: &str) -> String {
 impl Downloader for ED2KDownloader {
     async fn download(&mut self, task: &DownloadTask) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let ed2k_info = Self::parse_ed2k_url(&task.url)
-            .map_err(|e| format!("ED2K URL 解析失败: {}", e))?;
+            .map_err(|e| format!("Failed to parse ED2K URL: {}", e))?;
 
-        eprintln!("ED2K 下载: {} ({} bytes, hash={})",
+        eprintln!("ED2K Download: {} ({} bytes, hash={})",
             ed2k_info.name, ed2k_info.size, ed2k_info.hash);
 
         if let Some(ref monitor) = self.monitor {
             monitor.set_total_bytes(ed2k_info.size as i64);
         }
 
-        // 构建 HTTP 网关 URL（lyoko.io ED2K 网关）
+        // Build HTTP gateway URL (lyoko.io ED2K gateway)
         let gateway_url = format!("https://ed2k.lyoko.io/hash/{}", ed2k_info.hash);
-        eprintln!("通过 HTTP 网关下载: {}", gateway_url);
+        eprintln!("Downloading via HTTP gateway: {}", gateway_url);
 
-        // 用 reqwest 流式下载
+        // Use reqwest for streaming download
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .user_agent("Mozilla/5.0 (compatible; TTHSDNext)")
             .build()
-            .map_err(|e| format!("HTTP client 创建失败: {}", e))?;
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-        // 尝试网关请求，失败时返回友好错误
+        // Try gateway request, return friendly error on failure
         let response = client.get(&gateway_url)
             .send().await
-            .map_err(|e| format!("ED2K 网关请求失败 ({}): {}", gateway_url, e))?;
+            .map_err(|e| format!("ED2K gateway request failed ({}): {}", gateway_url, e))?;
 
         let status = response.status();
         if !status.is_success() {
             return Err(format!(
-                "ED2K 网关返回错误 HTTP {}: {}\n  hash={}\n  网关={}",
+                "ED2K gateway returned HTTP {}: {}\n  hash={}\n  gateway={}",
                 status.as_u16(), status.canonical_reason().unwrap_or("Unknown"),
                 ed2k_info.hash, gateway_url
             ).into());
@@ -137,8 +136,7 @@ impl Downloader for ED2KDownloader {
             monitor.set_total_bytes(total);
         }
 
-        let mut file = tokio::fs::File::create(&task.save_path).await
-            .map_err(|e| format!("创建文件失败: {}", e))?;
+        let mut file = create_download_file(&task.save_path, Some(total)).await?;
 
         let mut stream = response.bytes_stream();
         let mut downloaded: i64 = 0;
@@ -147,16 +145,16 @@ impl Downloader for ED2KDownloader {
         use tokio::io::AsyncWriteExt;
 
         while let Some(chunk) = stream.next().await {
-            let bytes = chunk.map_err(|e| format!("流读取失败: {}", e))?;
+            let bytes = chunk.map_err(|e| format!("Stream read error: {}", e))?;
             file.write_all(&bytes).await
-                .map_err(|e| format!("写入失败: {}", e))?;
+                .map_err(|e| format!("Write failed: {}", e))?;
             downloaded += bytes.len() as i64;
             if let Some(ref monitor) = self.monitor {
                 monitor.add_bytes(bytes.len() as i64).await;
             }
         }
 
-        eprintln!("ED2K 下载完成: {:.2} MB ({})",
+        eprintln!("ED2K download complete: {:.2} MB ({})",
             downloaded as f64 / 1024.0 / 1024.0, ed2k_info.name);
         Ok(())
     }

@@ -6,10 +6,11 @@ use bytes::Buf;
 use super::downloader_interface::{Downloader, BaseDownloader};
 use super::downloader::{DownloadTask, DownloadConfig};
 use super::performance_monitor::PerformanceMonitor;
+use super::file_utils::create_download_file;
 
-/// HTTP/3 下载器
-/// 使用 QUIC (quinn) + HTTP/3 (h3) 进行下载
-/// 失败时上层 get_downloader 可回退到 HTTPDownloader
+// HTTP/3 downloader
+// Uses QUIC (quinn) + HTTP/3 (h3) for downloads
+// Can fallback to HTTPDownloader on failure
 pub struct HTTP3Downloader {
     base: BaseDownloader,
     monitor: Option<Arc<PerformanceMonitor>>,
@@ -28,7 +29,7 @@ impl HTTP3Downloader {
         }
     }
 
-    /// 构建 rustls TLS 配置（用于 QUIC）
+    /// Build rustls TLS config for QUIC
     fn build_tls_config() -> Result<Arc<rustls::ClientConfig>, Box<dyn std::error::Error + Send + Sync>> {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
@@ -40,18 +41,18 @@ impl HTTP3Downloader {
         Ok(Arc::new(tls_config))
     }
 
-    /// 构建 QUIC 端点
+    /// Build QUIC endpoint
     fn build_quic_endpoint() -> Result<quinn::Endpoint, Box<dyn std::error::Error + Send + Sync>> {
         let tls_config = Self::build_tls_config()?;
 
         let quic_client_config = quinn::ClientConfig::new(Arc::new(
             quinn::crypto::rustls::QuicClientConfig::try_from(tls_config.as_ref().clone())
-                .map_err(|e| format!("QUIC TLS 配置失败: {}", e))?
+                .map_err(|e| format!("QUIC TLS config failed: {}", e))?
         ));
 
         let bind_addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
         let mut endpoint = quinn::Endpoint::client(bind_addr)
-            .map_err(|e| format!("QUIC Endpoint 创建失败: {}", e))?;
+            .map_err(|e| format!("Failed to create QUIC endpoint: {}", e))?;
 
         endpoint.set_default_client_config(quic_client_config);
         Ok(endpoint)
@@ -63,53 +64,53 @@ impl Downloader for HTTP3Downloader {
     async fn download(&mut self, task: &DownloadTask) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let url_str = &task.url;
 
-        // 解析 URL
+        // Parse URL
         let url = url::Url::parse(url_str)
-            .map_err(|e| format!("URL 解析失败: {}", e))?;
+            .map_err(|e| format!("Failed to parse URL: {}", e))?;
 
         let host = url.host_str()
-            .ok_or("URL 缺少主机名")?
+            .ok_or("URL missing host")?
             .to_string();
         let port = url.port().unwrap_or(443);
         let path = url.path().to_string();
         let query = url.query().map(|q| format!("?{}", q)).unwrap_or_default();
         let full_path = format!("{}{}", path, query);
 
-        eprintln!("HTTP/3 下载: {}:{}{}", host, port, full_path);
+        eprintln!("HTTP/3 Download: {}:{}{}", host, port, full_path);
 
-        // 构建 QUIC 端点
+        // Build QUIC endpoint
         let endpoint = Self::build_quic_endpoint()
-            .map_err(|e| format!("QUIC 端点构建失败: {}", e))?;
+            .map_err(|e| format!("Failed to build QUIC endpoint: {}", e))?;
 
-        // DNS 解析
+        // DNS resolution
         let addr_str = format!("{}:{}", host, port);
         let addrs: Vec<SocketAddr> = tokio::net::lookup_host(&addr_str).await
-            .map_err(|e| format!("DNS 解析失败 ({}): {}", addr_str, e))?
+            .map_err(|e| format!("DNS resolution failed ({}): {}", addr_str, e))?
             .collect();
 
         let server_addr = addrs.into_iter().next()
-            .ok_or_else(|| format!("无法解析主机: {}", host))?;
+            .ok_or_else(|| format!("Failed to resolve host: {}", host))?;
 
-        // 建立 QUIC 连接
+        // Establish QUIC connection
         let connecting = endpoint.connect(server_addr, &host)
-            .map_err(|e| format!("QUIC 连接发起失败: {}", e))?;
+            .map_err(|e| format!("Failed to initiate QUIC connection: {}", e))?;
 
         let quic_conn = connecting.await
-            .map_err(|e| format!("QUIC 握手失败: {}", e))?;
+            .map_err(|e| format!("QUIC handshake failed: {}", e))?;
 
-        eprintln!("HTTP/3 QUIC 握手成功 ({})", server_addr);
+        eprintln!("HTTP/3 QUIC handshake successful ({})", server_addr);
 
-        // 建立 h3 连接
+        // Establish h3 connection
         let (mut driver, mut send_request) = h3::client::new(h3_quinn::Connection::new(quic_conn))
             .await
-            .map_err(|e| format!("HTTP/3 连接建立失败: {}", e))?;
+            .map_err(|e| format!("Failed to establish HTTP/3 connection: {}", e))?;
 
-        // 在后台驱动连接
+        // Drive connection in background
         let _driver_task = tokio::spawn(async move {
             let _ = futures::future::poll_fn(|cx| driver.poll_close(cx)).await;
         });
 
-        // 构建 HTTP/3 GET 请求
+        // Build HTTP/3 GET request
         let request = http::Request::builder()
             .method(http::Method::GET)
             .uri(url_str.as_str())
@@ -117,26 +118,26 @@ impl Downloader for HTTP3Downloader {
             .header("user-agent", "TTHSDNext/1.0 (HTTP/3)")
             .header("accept", "*/*")
             .body(())
-            .map_err(|e| format!("HTTP/3 请求构建失败: {}", e))?;
+            .map_err(|e| format!("Failed to build HTTP/3 request: {}", e))?;
 
         let mut stream = send_request.send_request(request).await
-            .map_err(|e| format!("HTTP/3 发送请求失败: {}", e))?;
+            .map_err(|e| format!("Failed to send HTTP/3 request: {}", e))?;
 
         stream.finish().await
-            .map_err(|e| format!("HTTP/3 流结束失败: {}", e))?;
+            .map_err(|e| format!("Failed to end HTTP/3 stream: {}", e))?;
 
-        // 读取响应头
+        // Read response
         let response = stream.recv_response().await
-            .map_err(|e| format!("HTTP/3 接收响应失败: {}", e))?;
+            .map_err(|e| format!("Failed to receive HTTP/3 response: {}", e))?;
 
         let status = response.status();
-        eprintln!("HTTP/3 响应状态: {}", status);
+        eprintln!("HTTP/3 response status: {}", status);
 
         if !status.is_success() {
-            return Err(format!("HTTP/3 服务器返回错误: {}", status).into());
+            return Err(format!("HTTP/3 server returned error: {}", status).into());
         }
 
-        // 从响应头获取 Content-Length
+        // Get Content-Length from response headers
         let total = response.headers()
             .get("content-length")
             .and_then(|v| v.to_str().ok())
@@ -149,11 +150,10 @@ impl Downloader for HTTP3Downloader {
             }
         }
 
-        // 创建输出文件
-        let mut file = tokio::fs::File::create(&task.save_path).await
-            .map_err(|e| format!("创建文件失败: {}", e))?;
+        // Create output file
+        let mut file = create_download_file(&task.save_path, Some(total)).await?;
 
-        // 流式读取响应体
+        // Stream response body
         let mut downloaded: i64 = 0;
         // use tokio::io::AsyncWriteExt;
 
@@ -166,7 +166,7 @@ impl Downloader for HTTP3Downloader {
                         let chunk_len = data.remaining().min(65536);
                         let chunk = data.chunk()[..chunk_len].to_vec();
                         file.write_all(&chunk).await
-                            .map_err(|e| format!("写入文件失败: {}", e))?;
+                            .map_err(|e| format!("Failed to write file: {}", e))?;
                         data.advance(chunk_len);
                         downloaded += chunk_len as i64;
                         if let Some(ref monitor) = self.monitor {
@@ -174,12 +174,12 @@ impl Downloader for HTTP3Downloader {
                         }
                     }
                 }
-                Ok(None) => break, // 响应体结束
-                Err(e) => return Err(format!("HTTP/3 数据读取失败: {}", e).into()),
+                Ok(None) => break, // Response body ended
+                Err(e) => return Err(format!("HTTP/3 data read error: {}", e).into()),
             }
         }
 
-        eprintln!("HTTP/3 下载完成: {:.2} MB", downloaded as f64 / 1024.0 / 1024.0);
+        eprintln!("HTTP/3 download complete: {:.2} MB", downloaded as f64 / 1024.0 / 1024.0);
         Ok(())
     }
 

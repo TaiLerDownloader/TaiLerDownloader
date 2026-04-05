@@ -61,3 +61,5 @@ logs/
 !TTHSD_Release.7z
 *.txt
 problem*
+
+docs/

@@ -9,7 +9,7 @@ TTHSD_interface.py - TT 高速下载器 Python 接口封装
 
 依赖: Python 3.11+, 标准库 (ctypes, json, queue)
 
-作者: 23XR Studio
+作者: TT23XR Studio
 文档: https://docss.sxxyrry.qzz.io/TTHSD/
 """
 
@@ -84,15 +84,17 @@ def _build_tasks_json(
     save_paths: list[str],
     show_names: list[str] | None = None,
     ids: list[str] | None = None,
+    task_headers: list[dict[str, str]] | None = None,
 ) -> str:
     """
     将 URL / 保存路径列表打包为 DLL 所接受的 JSON 字符串。
 
     参数:
-        urls:       下载 URL 列表
-        save_paths: 对应保存路径列表（长度必须与 urls 相等）
-        show_names: 显示名称（可选，省略时使用 URL 最后一段）
-        ids:        任务 ID（可选，省略时自动生成）
+        urls:        下载 URL 列表
+        save_paths:  对应保存路径列表（长度必须与 urls 相等）
+        show_names:  显示名称（可选，省略时使用 URL 最后一段）
+        ids:         任务 ID（可选，省略时自动生成）
+        task_headers: 每个任务的额外 headers（可选，与 urls 等长）
 
     返回:
         JSON 格式字符串
@@ -102,18 +104,21 @@ def _build_tasks_json(
             f"urls 与 save_paths 长度不一致: {len(urls)} vs {len(save_paths)}"
         )
 
-    tasks: list[dict[str, str]] = []
+    tasks: list[dict[str, Any]] = []
     for i, (url, save_path) in enumerate(zip(urls, save_paths)):
         show_name = (show_names[i] if show_names and i < len(show_names)
                      else Path(url.split("?")[0]).name or f"task_{i}")
         task_id = (ids[i] if ids and i < len(ids)
                    else str(uuid.uuid4()))
-        tasks.append({
+        task_data: dict[str, Any] = {
             "url": url,
             "save_path": str(save_path),
             "show_name": show_name,
             "id": task_id,
-        })
+        }
+        if task_headers and i < len(task_headers) and task_headers[i]:
+            task_data["headers"] = task_headers[i]
+        tasks.append(task_data)
     return json.dumps(tasks, ensure_ascii=False)
 
 
@@ -194,6 +199,7 @@ class TTHSDownloader:
             ctypes.c_char_p,   # userAgent (nullable)
             ctypes.c_char_p,   # remoteCallbackUrl (nullable)
             ctypes.c_void_p,   # useSocket (bool*, nullable)
+            ctypes.c_char_p,   # headersJson (nullable)
         ]
         dll.get_downloader.restype = ctypes.c_int
 
@@ -209,6 +215,7 @@ class TTHSDownloader:
             ctypes.c_char_p,   # remoteCallbackUrl (nullable)
             ctypes.c_void_p,   # useSocket (bool*, nullable)
             ctypes.c_void_p,   # isMultiple (bool*, nullable)
+            ctypes.c_char_p,   # headersJson (nullable)
         ]
         dll.start_download.restype = ctypes.c_int
 
@@ -231,6 +238,26 @@ class TTHSDownloader:
         # --- stop_download ---
         dll.stop_download.argtypes = [ctypes.c_int]
         dll.stop_download.restype = ctypes.c_int
+
+        # --- set_speed_limit ---
+        dll.set_speed_limit.argtypes = [ctypes.c_int, ctypes.c_uint64]
+        dll.set_speed_limit.restype = ctypes.c_int
+
+        # --- set_proxy ---
+        dll.set_proxy.argtypes = [ctypes.c_int, ctypes.c_char_p]
+        dll.set_proxy.restype = ctypes.c_int
+
+        # --- set_retry_config ---
+        dll.set_retry_config.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint64, ctypes.c_uint64]
+        dll.set_retry_config.restype = ctypes.c_int
+
+        # --- get_performance_stats ---
+        dll.get_performance_stats.argtypes = [ctypes.c_int]
+        dll.get_performance_stats.restype = ctypes.c_char_p
+
+        # --- free_string ---
+        dll.free_string.argtypes = [ctypes.c_char_p]
+        dll.free_string.restype = None
 
     # ------------------------------------------------------------------
     # 内部工具：构建 C 回调
@@ -297,6 +324,8 @@ class TTHSDownloader:
         use_socket: bool | None = None,
         show_names: list[str] | None = None,
         ids: list[str] | None = None,
+        headers: dict[str, str] | None = None,
+        task_headers: list[dict[str, str]] | None = None,
     ) -> int:
         """
         创建下载器实例，但**不启动下载**。
@@ -313,12 +342,17 @@ class TTHSDownloader:
             use_socket:         是否启用 Socket 通信（None 不启用）
             show_names:         各任务显示名称列表（可选）
             ids:                各任务 ID 列表（可选）
+            headers:            全局 headers（对该下载器所有任务生效）
+            task_headers:       每个任务的额外 headers（与 urls 等长）
 
         返回:
             下载器实例 ID（正整数），失败时返回 -1
         """
-        tasks_json = _build_tasks_json(urls, save_paths, show_names, ids)
+        tasks_json = _build_tasks_json(urls, save_paths, show_names, ids, task_headers)
         task_count = len(urls)
+
+        headers_json = json.dumps(headers) if headers else None
+        headers_bytes = headers_json.encode("utf-8") if headers_json else None
 
         c_cb: CFuncPtr | None = None
         cb_ptr: ctypes.c_void_p | None = None
@@ -345,6 +379,7 @@ class TTHSDownloader:
             ua_bytes,
             rc_url_bytes,
             use_socket_ptr,
+            headers_bytes,
         )
 
         if dl_id == -1:
@@ -368,6 +403,8 @@ class TTHSDownloader:
         is_multiple: bool | None = None,
         show_names: list[str] | None = None,
         ids: list[str] | None = None,
+        headers: dict[str, str] | None = None,
+        task_headers: list[dict[str, str]] | None = None,
     ) -> int:
         """
         创建下载器实例并**立即启动下载**。
@@ -385,11 +422,13 @@ class TTHSDownloader:
             is_multiple:        True=并行下载(实验性), False/None=顺序下载
             show_names:         各任务显示名称列表（可选）
             ids:                各任务 ID 列表（可选）
+            headers:            全局 headers（对该下载器所有任务生效）
+            task_headers:       每个任务的额外 headers（与 urls 等长）
 
         返回:
             下载器实例 ID（正整数），失败时返回 -1
         """
-        tasks_json = _build_tasks_json(urls, save_paths, show_names, ids)
+        tasks_json = _build_tasks_json(urls, save_paths, show_names, ids, task_headers)
         task_count = len(urls)
 
         c_cb: CFuncPtr | None = None
@@ -413,6 +452,9 @@ class TTHSDownloader:
         else:
             is_multiple_ptr = None
 
+        headers_json = json.dumps(headers) if headers else None
+        headers_bytes = headers_json.encode("utf-8") if headers_json else None
+
         dl_id = self._dll.start_download(
             tasks_json.encode("utf-8"),
             task_count,
@@ -424,6 +466,7 @@ class TTHSDownloader:
             rc_url_bytes,
             use_socket_ptr,
             is_multiple_ptr,
+            headers_bytes,
         )
 
         if dl_id == -1:
@@ -515,6 +558,90 @@ class TTHSDownloader:
         if ret != 0:
             _logger.warning(f"stop_download(id={downloader_id}) 返回 {ret}（失败）")
         return ret == 0
+
+    def set_speed_limit(self, downloader_id: int, speed_limit_bps: int) -> bool:
+        """
+        设置下载速度限制。
+
+        参数:
+            downloader_id: 下载器实例 ID
+            speed_limit_bps: 速度限制 (bytes/s)，0 表示不限制
+
+        返回:
+            True 表示成功，False 表示下载器不存在
+        """
+        ret = self._dll.set_speed_limit(ctypes.c_int(downloader_id), ctypes.c_uint64(speed_limit_bps))
+        if ret != 0:
+            _logger.warning(f"set_speed_limit(id={downloader_id}) 返回 {ret}（失败）")
+        return ret == 0
+
+    def set_proxy(self, downloader_id: int, proxy_url: str | None) -> bool:
+        """
+        设置代理服务器。
+
+        参数:
+            downloader_id: 下载器实例 ID
+            proxy_url: 代理 URL (如 "http://proxy:8080")，None 表示不使用代理
+
+        返回:
+            True 表示成功，False 表示下载器不存在
+        """
+        proxy_bytes = proxy_url.encode("utf-8") if proxy_url else None
+        ret = self._dll.set_proxy(ctypes.c_int(downloader_id), proxy_bytes)
+        if ret != 0:
+            _logger.warning(f"set_proxy(id={downloader_id}) 返回 {ret}（失败）")
+        return ret == 0
+
+    def set_retry_config(self, downloader_id: int, max_retries: int = 3, retry_delay_ms: int = 1000, max_retry_delay_ms: int = 30000) -> bool:
+        """
+        配置重试参数。
+
+        参数:
+            downloader_id: 下载器实例 ID
+            max_retries: 最大重试次数 (默认 3)
+            retry_delay_ms: 初始重试延迟 (ms，默认 1000)
+            max_retry_delay_ms: 最大重试延迟 (ms，默认 30000)
+
+        返回:
+            True 表示成功，False 表示下载器不存在
+        """
+        ret = self._dll.set_retry_config(
+            ctypes.c_int(downloader_id),
+            ctypes.c_uint32(max_retries),
+            ctypes.c_uint64(retry_delay_ms),
+            ctypes.c_uint64(max_retry_delay_ms),
+        )
+        if ret != 0:
+            _logger.warning(f"set_retry_config(id={downloader_id}) 返回 {ret}（失败）")
+        return ret == 0
+
+    def get_performance_stats(self, downloader_id: int) -> dict[str, Any]:
+        """
+        获取性能统计信息。
+
+        参数:
+            downloader_id: 下载器实例 ID
+
+        返回:
+            性能统计字典，包含:
+            - total_bytes: 总下载字节数
+            - current_speed_bps: 当前速度 (bytes/s)
+            - current_speed_mbps: 当前速度 (MB/s)
+            - average_speed_bps: 平均速度 (bytes/s)
+            - average_speed_mbps: 平均速度 (MB/s)
+            - peak_speed_bps: 峰值速度 (bytes/s)
+            - peak_speed_mbps: 峰值速度 (MB/s)
+            - chunk_downloads: 分块下载数
+            - failed_chunks: 失败分块数
+            - retried_chunks: 重试分块数
+            - elapsed_time: 运行时间 (秒)
+        """
+        result_ptr = self._dll.get_performance_stats(ctypes.c_int(downloader_id))
+        try:
+            result_str = ctypes.string_at(result_ptr).decode("utf-8")
+            return json.loads(result_str) if result_str else {}
+        finally:
+            self._dll.free_string(result_ptr)
 
     def close(self) -> None:
         """

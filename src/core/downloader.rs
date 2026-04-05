@@ -15,6 +15,8 @@ pub struct DownloadTask {
     pub save_path: String,
     pub show_name: String,
     pub id: String,
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
 }
 
 pub type ProgressCallback = extern "C" fn(*const std::ffi::c_char, *const std::ffi::c_char);
@@ -30,6 +32,12 @@ pub struct DownloadConfig {
     pub use_socket: Option<bool>,
     pub show_name: String,
     pub user_agent: String,
+    pub max_retries: usize,
+    pub retry_delay_ms: u64,
+    pub max_retry_delay_ms: u64,
+    pub speed_limit_bps: u64,
+    pub proxy_url: Option<String>,
+    pub headers: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +92,14 @@ pub struct HSDownloader {
 }
 
 impl HSDownloader {
+    pub fn merge_headers(global_headers: &std::collections::HashMap<String, String>, task_headers: &std::collections::HashMap<String, String>) -> std::collections::HashMap<String, String> {
+        let mut merged = global_headers.clone();
+        for (key, value) in task_headers {
+            merged.insert(key.clone(), value.clone());
+        }
+        merged
+    }
+
     pub fn new(config: DownloadConfig) -> Self {
         let config = Arc::new(RwLock::new(config));
 
@@ -130,6 +146,12 @@ impl HSDownloader {
             use_socket: None,
             show_name: String::new(),
             user_agent: UA.to_string(),
+            max_retries: 3,
+            retry_delay_ms: 1000,
+            max_retry_delay_ms: 30000,
+            speed_limit_bps: 0,
+            proxy_url: None,
+            headers: std::collections::HashMap::new(),
         };
 
         Self::new(config)
@@ -148,8 +170,8 @@ impl HSDownloader {
 
         let event = Event {
             event_type: EventType::Start,
-            name: "开始下载".to_string(),
-            show_name: "全局".to_string(),
+            name: "Start Download".to_string(),
+            show_name: "Global".to_string(),
             id: String::new(),
         };
 
@@ -200,8 +222,8 @@ impl HSDownloader {
                             }
                             let event = Event {
                                 event_type: EventType::Update,
-                                name: "进度更新".to_string(),
-                                show_name: "全局".to_string(),
+                                name: "Progress Update".to_string(),
+                                show_name: "Global".to_string(),
                                 id: String::new(),
                             };
                             let _ = send_message(event, stats, &monitor_config, &monitor_ws, &monitor_socket).await;
@@ -235,8 +257,8 @@ impl HSDownloader {
 
         let end_event = Event {
             event_type: EventType::End,
-            name: "结束所有下载".to_string(),
-            show_name: "全局".to_string(),
+            name: "End All Downloads".to_string(),
+            show_name: "Global".to_string(),
             id: String::new(),
         };
 
@@ -266,8 +288,8 @@ impl HSDownloader {
 
         let event = Event {
             event_type: EventType::Start,
-            name: "开始批量下载".to_string(),
-            show_name: "全局".to_string(),
+            name: "Start Batch Download".to_string(),
+            show_name: "Global".to_string(),
             id: String::new(),
         };
 
@@ -319,8 +341,8 @@ impl HSDownloader {
                             
                             let event = Event {
                                 event_type: EventType::Update,
-                                name: "进度更新".to_string(),
-                                show_name: "全局".to_string(),
+                                name: "Progress Update".to_string(),
+                                show_name: "Global".to_string(),
                                 id: String::new(),
                             };
                             let _ = send_message(event, stats, &monitor_config, &monitor_ws, &monitor_socket).await;
@@ -353,8 +375,8 @@ impl HSDownloader {
 
         let end_event = Event {
             event_type: EventType::End,
-            name: "结束批量下载".to_string(),
-            show_name: "全局".to_string(),
+            name: "End Batch Download".to_string(),
+            show_name: "Global".to_string(),
             id: String::new(),
         };
 
@@ -382,7 +404,7 @@ impl HSDownloader {
 
         let start_event = Event {
             event_type: EventType::StartOne,
-            name: "开始一个下载".to_string(),
+            name: "Start One Download".to_string(),
             show_name: task.show_name.clone(),
             id: task.id.clone(),
         };
@@ -398,16 +420,71 @@ impl HSDownloader {
             eprintln!("Failed to send start event: {:?}", e);
         }
 
-        // 通过工厂函数获取下载器实例（支持多种下载器类型扩展）
         let err: Option<Box<dyn std::error::Error + Send + Sync>> = {
-            let mut downloader = super::get_downloader::get_downloader(config.clone()).await;
-            match downloader.download(&task).await {
-                Ok(()) => None,
-                Err(e) => {
-                    eprintln!("下载失败 [{}]: {:?}", task.show_name, e);
-                    Some(e)
+            let cfg = config.read().await;
+            let max_retries = cfg.max_retries;
+            let retry_delay_ms = cfg.retry_delay_ms;
+            let max_retry_delay_ms = cfg.max_retry_delay_ms;
+            drop(cfg);
+
+            let mut current_retry = 0;
+            let mut delay = retry_delay_ms;
+            let mut last_error: Option<Box<dyn std::error::Error + Send + Sync>>;
+
+            loop {
+                let mut downloader = super::get_downloader::get_downloader(config.clone()).await;
+                let result = downloader.download(&task).await;
+
+                match result {
+                    Ok(()) => {
+                        if current_retry > 0 {
+                            let retry_event = Event {
+                                event_type: EventType::Msg,
+                                name: "Retry Success".to_string(),
+                                show_name: task.show_name.clone(),
+                                id: task.id.clone(),
+                            };
+                            let mut retry_data = HashMap::new();
+                            retry_data.insert("Text".to_string(), serde_json::Value::String(format!("Retry {} succeeded", current_retry)));
+                            let _ = send_message(retry_event, retry_data, &config, &ws_client, &socket_client).await;
+                        }
+                        return;
+                    }
+                    Err(e) => {
+                        last_error = Some(e);
+                        current_retry += 1;
+
+                        if current_retry > max_retries {
+                            break;
+                        }
+
+                        let retry_event = Event {
+                            event_type: EventType::Msg,
+                            name: "Retry Download".to_string(),
+                            show_name: task.show_name.clone(),
+                            id: task.id.clone(),
+                        };
+                        let mut retry_data = HashMap::new();
+                        retry_data.insert("Text".to_string(), serde_json::Value::String(format!("Retry {} failed, retrying in {}ms (max {})", current_retry, delay, max_retries)));
+                        let _ = send_message(retry_event, retry_data, &config, &ws_client, &socket_client).await;
+
+                        if !token.is_cancelled() {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+                        }
+
+                        delay = (delay * 2).min(max_retry_delay_ms);
+                    }
+                }
+
+                if token.is_cancelled() {
+                    break;
                 }
             }
+
+            if let Some(ref e) = last_error {
+                eprintln!("Download failed [{}] (retried {} times): {:?}", task.show_name, max_retries, e);
+            }
+            last_error
         };
 
         let mut end_data = HashMap::new();
@@ -421,12 +498,13 @@ impl HSDownloader {
             if !token.is_cancelled() {
                 let error_event = Event {
                     event_type: EventType::Err,
-                    name: "错误".to_string(),
+                    name: "Error".to_string(),
                     show_name: task.show_name.clone(),
                     id: task.id.clone(),
                 };
                 let mut error_data = HashMap::new();
-                error_data.insert("Error".to_string(), serde_json::Value::String(format!("下载文件失败: {:?}", e)));
+                let error_msg = format!("Download failed: {}", Self::format_error(&e));
+                error_data.insert("Error".to_string(), serde_json::Value::String(error_msg));
 
                 let _ = send_message(error_event, error_data, &config, &ws_client, &socket_client).await;
             }
@@ -434,12 +512,42 @@ impl HSDownloader {
 
         let end_event = Event {
             event_type: EventType::EndOne,
-            name: "结束一个下载".to_string(),
+            name: "End One Download".to_string(),
             show_name: task.show_name,
             id: task.id,
         };
 
         let _ = send_message(end_event, end_data, &config, &ws_client, &socket_client).await;
+    }
+
+    fn format_error(e: &Box<dyn std::error::Error + Send + Sync>) -> String {
+        let error_str = e.to_string();
+        if error_str.contains("status code: 502") {
+            return "Server returned 502 Bad Gateway - server may be overloaded or under maintenance, please retry later".to_string();
+        } else if error_str.contains("status code: 503") {
+            return "Server returned 503 Service Unavailable - service temporarily unavailable, please retry later".to_string();
+        } else if error_str.contains("status code: 504") {
+            return "Server returned 504 Gateway Timeout - server response timeout, please check network or retry later".to_string();
+        } else if error_str.contains("status code: 404") {
+            return "Server returned 404 Not Found - file does not exist or link has expired".to_string();
+        } else if error_str.contains("status code: 403") {
+            return "Server returned 403 Forbidden - no access permission, may require authentication or proxy".to_string();
+        } else if error_str.contains("Connection refused") {
+            return "Connection refused - server rejected connection, possibly wrong port or service not started".to_string();
+        } else if error_str.contains("Connection reset") {
+            return "Connection reset - server unexpectedly closed connection, possibly unstable network or overloaded server".to_string();
+        } else if error_str.contains("Timeout") || error_str.contains("timed out") {
+            return "Request timeout - network connection timeout, please check network status or retry later".to_string();
+        } else if error_str.contains("No route to host") {
+            return "No route to host - please check network connection or target address".to_string();
+        } else if error_str.contains("StorageFull") || error_str.contains("No space left") {
+            return "Insufficient disk space - please free up disk space and retry".to_string();
+        } else if error_str.contains("Permission denied") {
+            return "Permission denied - cannot write to target path, please check file permissions".to_string();
+        } else if error_str.contains("Not Found") || error_str.contains("does not exist") {
+            return "File not found - please check if URL is correct".to_string();
+        }
+        error_str
     }
 
     pub async fn pause_download(&self) {
@@ -451,13 +559,13 @@ impl HSDownloader {
 
         let event = Event {
             event_type: EventType::Msg,
-            name: "暂停".to_string(),
-            show_name: "全局".to_string(),
+            name: "Pause".to_string(),
+            show_name: "Global".to_string(),
             id: String::new(),
         };
 
         let mut data = HashMap::new();
-        data.insert("Text".to_string(), serde_json::Value::String("下载已暂停".to_string()));
+        data.insert("Text".to_string(), serde_json::Value::String("Download paused".to_string()));
 
         let _ = send_message(event, data, &self.config, &self.ws_client, &self.socket_client).await;
     }
@@ -482,13 +590,13 @@ impl HSDownloader {
 
         let event = Event {
             event_type: EventType::Msg,
-            name: "停止".to_string(),
-            show_name: "全局".to_string(),
+            name: "Stop".to_string(),
+            show_name: "Global".to_string(),
             id: String::new(),
         };
 
         let mut data = HashMap::new();
-        data.insert("Text".to_string(), serde_json::Value::String("下载已停止".to_string()));
+        data.insert("Text".to_string(), serde_json::Value::String("Download stopped".to_string()));
 
         send_message(event, data, &self.config, &self.ws_client, &self.socket_client).await?;
 

@@ -68,7 +68,7 @@ impl SocketClient {
                 *connected = true;
             }
             Err(e) => {
-                eprintln!("Socket连接失败: {:?}", e);
+                eprintln!("Socket connection failed: {:?}", e);
             }
         }
     }
@@ -112,16 +112,16 @@ impl SocketClient {
         payload: Vec<u8>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let conn_guard = connection.lock().await;
-                let mut conn = conn_guard.as_ref().ok_or("socket not connected")?.try_clone()?;
-                drop(conn_guard);
-        
-                let conn_connected = connected.lock().await;
-                if !*conn_connected {
-                    return Err("socket not connected".into());
-                }
-                drop(conn_connected);
-        
-                conn.set_write_timeout(Some(Duration::from_secs(3)))?;
+        let mut conn = conn_guard.as_ref().ok_or("socket not connected")?.try_clone()?;
+        drop(conn_guard);
+
+        let conn_connected = connected.lock().await;
+        if !*conn_connected {
+            return Err("socket not connected".into());
+        }
+        drop(conn_connected);
+
+        conn.set_write_timeout(Some(Duration::from_secs(3)))?;
         conn.write_all(&payload)?;
 
         Ok(())
@@ -143,7 +143,7 @@ impl SocketClient {
         let data_bytes = match serde_json::to_string(&data) {
             Ok(bytes) => bytes,
             Err(e) => {
-                eprintln!("序列化额外数据失败: {:?}", e);
+                eprintln!("Failed to serialize extra data: {:?}", e);
                 return;
             }
         };
@@ -156,7 +156,7 @@ impl SocketClient {
         let json_data = match serde_json::to_string(&message) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("序列化消息失败: {:?}", e);
+                eprintln!("Failed to serialize message: {:?}", e);
                 return;
             }
         };
@@ -171,7 +171,7 @@ impl SocketClient {
         match self.send_queue.send(json_data) {
             Ok(_) => {}
             Err(_) => {
-                eprintln!("Socket发送队列阻塞，丢弃非进度消息");
+                eprintln!("Socket send queue blocked, dropping non-progress message");
             }
         }
     }

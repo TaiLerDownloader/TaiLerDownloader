@@ -1,0 +1,95 @@
+# TTHSD Next 更新日志
+
+## 0.1.0-dev.5 (2026-04-05)
+
+### 新增功能
+
+- **自动重试机制**
+  - 支持指数退避算法（默认：初始延迟 1s，最大延迟 30s，最大重试 3 次）
+  - 可通过 ABI `set_retry_config()` 运行时配置
+
+- **速度限制**
+  - 支持通过 ABI `set_speed_limit(speed_bps)` 设置下载速度限制
+  - 参数 speed_bps 为 bytes/s，0 表示不限速
+
+- **代理支持**
+  - 支持 HTTP/HTTPS/SOCKS5 代理
+  - 可通过 ABI `set_proxy(proxy_url)` 运行时设置
+  - 使用 NULL/None 禁用代理
+
+- **性能统计**
+  - 新增 ABI `get_performance_stats()` 返回 JSON 格式统计信息
+  - 包含：总下载量、当前速度、平均速度、峰值速度、分块下载数、失败/重试数、运行时间
+  - 需配合 `free_string()` 释放内存
+
+- **Headers 支持**
+  - 全局 Headers：所有任务共享，通过 `headersJson` 参数设置
+  - 任务级 Headers：每个任务独立，通过任务数据的 `headers` 字段设置
+  - 任务级会覆盖全局同名 Header
+
+### API 变更
+
+新增 ABI 函数：
+
+| 函数 | 描述 |
+|------|------|
+| `set_speed_limit(id, speed_bps)` | 设置速度限制 |
+| `set_proxy(id, proxy_url)` | 设置代理服务器 |
+| `set_retry_config(id, max_retries, delay_ms, max_delay_ms)` | 配置重试参数 |
+| `get_performance_stats(id)` | 获取性能统计 |
+| `free_string(ptr)` | 释放 get_performance_stats 返回的内存 |
+
+`start_download` / `get_downloader` 新增参数 `headersJson`
+
+### 错误处理改进
+
+- 改进的错误信息格式，更友好的错误描述
+- 支持常见 HTTP 错误码（502/503/504/404/403）的中文提示
+- 网络错误（连接拒绝、超时、无法路由等）的清晰描述
+- 文件系统错误（磁盘空间不足、权限拒绝等）的明确提示
+
+### 性能优化
+
+- HTTP 连接池优化：tcp_nodelay、tcp_keepalive
+- Buffer Pool 预留：用于未来内存复用优化
+- 代码重构：统一文件创建逻辑（file_utils.rs）
+
+### 测试
+
+- 新增 Python 单元测试框架 (`scripts/test_tthsd.py`)
+- 覆盖：接口测试、下载功能、速度限制、代理、重试、Headers、暂停/恢复
+
+---
+
+## 0.1.0-dev.4
+
+### 支持的协议
+
+| 协议 | 状态 |
+|------|------|
+| HTTP/HTTPS | ✅ 已实现 |
+| HTTP/3 (+QUIC) | ✅ 已实现（自动探测） |
+| FTP/FTPS | ✅ 已实现 |
+| SFTP | ✅ 已实现 |
+| BitTorrent (Magnet/Torrent) | ✅ 已实现 |
+| ED2K | ✅ 已实现 |
+| Metalink | ✅ 已实现 |
+
+### 支持的回调方式
+
+- C ABI Function（回调函数指针）
+- WebSocket（远程回调）
+- Socket（远程回调）
+
+### 支持的平台
+
+- Windows (x64, ARM64)
+- Linux (x64, ARM64)
+- macOS (x64, ARM64)
+- Android (arm64-v8a, armeabi-v7a, x86_64)
+- HarmonyOS Next (ARM64, x86_64)
+- iOS (理论支持)
+
+---
+
+*更多历史版本信息将陆续添加*

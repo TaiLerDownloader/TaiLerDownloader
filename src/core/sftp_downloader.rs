@@ -5,10 +5,11 @@ use tokio::sync::RwLock;
 use super::downloader_interface::{Downloader, BaseDownloader};
 use super::downloader::{DownloadTask, DownloadConfig};
 use super::performance_monitor::PerformanceMonitor;
+use super::file_utils::create_download_file;
 use russh::keys::ssh_key;
 
-/// SFTP 下载器
-/// 使用 russh (纯 Rust SSH) + russh-sftp 实现异步 SFTP 文件下载
+/// SFTP downloader
+/// Uses russh (pure Rust SSH) + russh-sftp for async SFTP file downloads
 pub struct SFTPDownloader {
     base: BaseDownloader,
     monitor: Option<Arc<PerformanceMonitor>>,
@@ -28,14 +29,14 @@ impl SFTPDownloader {
         }
     }
 
-    /// 解析 SFTP URL 为 (host, port, path, username, password)
-    /// 格式: sftp://[user[:password]@]host[:port]/path/to/file
+    /// Parse SFTP URL -> (host, port, path, username, password)
+    /// Format: sftp://[user[:password]@]host[:port]/path/to/file
     fn parse_sftp_url(url: &str) -> Result<(String, u16, String, String, String), Box<dyn std::error::Error + Send + Sync>> {
         let parsed = url::Url::parse(url)
-            .map_err(|e| format!("无效的 SFTP URL: {}", e))?;
+            .map_err(|e| format!("Invalid SFTP URL: {}", e))?;
 
         let host = parsed.host_str()
-            .ok_or("SFTP URL 缺少主机名")?
+            .ok_or("SFTP URL missing host")?
             .to_string();
         let port = parsed.port().unwrap_or(22);
         let path = parsed.path().to_string();
@@ -47,15 +48,15 @@ impl SFTPDownloader {
         let password = parsed.password().unwrap_or("").to_string();
 
         if path.is_empty() || path == "/" {
-            return Err("SFTP URL 缺少文件路径".into());
+            return Err("SFTP URL missing file path".into());
         }
 
         Ok((host, port, path, username, password))
     }
 }
 
-/// russh 需要一个 Handler 来处理 SSH 会话事件
-/// 这里使用最简实现：接受所有主机密钥，不做额外处理
+/// russh requires a Handler to process SSH session events
+/// Minimal implementation: accept all host keys, no extra processing
 struct SshHandler;
 
 #[async_trait::async_trait]
@@ -77,66 +78,64 @@ impl Downloader for SFTPDownloader {
         let save_path = task.save_path.clone();
         let monitor = self.monitor.clone();
 
-        eprintln!("SFTP 连接: {}@{}:{} 路径: {}", username, host, port, remote_path);
+        eprintln!("SFTP connecting: {}@{}:{} path: {}", username, host, port, remote_path);
 
-        // 1. 配置 SSH 客户端
+        // 1. Configure SSH client
         let config = russh::client::Config::default();
         let config = Arc::new(config);
 
-        // 2. 建立 SSH 连接
+        // 2. Establish SSH connection
         let mut session = russh::client::connect(config, (host.as_str(), port), SshHandler)
             .await
-            .map_err(|e| format!("SSH 连接失败: {}", e))?;
+            .map_err(|e| format!("SSH connection failed: {}", e))?;
 
-        // 3. 密码认证
+        // 3. Password authentication
         let auth_result = session.authenticate_password(&username, &password)
             .await
-            .map_err(|e| format!("SSH 认证失败: {}", e))?;
+            .map_err(|e| format!("SSH authentication failed: {}", e))?;
 
         if !auth_result.success() {
-            return Err("SSH 密码认证被拒绝".into());
+            return Err("SSH password authentication rejected".into());
         }
 
-        eprintln!("SSH 认证成功");
+        eprintln!("SSH authentication successful");
 
-        // 4. 打开 SFTP 通道
+        // 4. Open SFTP channel
         let channel = session.channel_open_session()
             .await
-            .map_err(|e| format!("打开 SSH 通道失败: {}", e))?;
+            .map_err(|e| format!("Failed to open SSH channel: {}", e))?;
 
         channel.request_subsystem(true, "sftp")
             .await
-            .map_err(|e| format!("请求 SFTP 子系统失败: {}", e))?;
+            .map_err(|e| format!("Failed to request SFTP subsystem: {}", e))?;
 
         let sftp = russh_sftp::client::SftpSession::new(channel.into_stream())
             .await
-            .map_err(|e| format!("初始化 SFTP 会话失败: {}", e))?;
+            .map_err(|e| format!("Failed to initialize SFTP session: {}", e))?;
 
-        eprintln!("SFTP 会话已建立");
+        eprintln!("SFTP session established");
 
-        // 5. 获取远程文件信息
+        // 5. Get remote file info
         let metadata = sftp.metadata(&remote_path)
             .await
-            .map_err(|e| format!("获取远程文件信息失败: {}", e))?;
+            .map_err(|e| format!("Failed to get remote file info: {}", e))?;
 
         let file_size = metadata.size.unwrap_or(0) as i64;
-        eprintln!("SFTP 文件大小: {} bytes ({:.2} MB)",
+        eprintln!("SFTP file size: {} bytes ({:.2} MB)",
             file_size, file_size as f64 / 1024.0 / 1024.0);
 
-        // 6. 打开远程文件
+        // 6. Open remote file
         let mut remote_file = sftp.open(&remote_path)
             .await
-            .map_err(|e| format!("打开远程文件失败: {}", e))?;
+            .map_err(|e| format!("Failed to open remote file: {}", e))?;
 
-        // 7. 创建本地文件并写入
-        let mut local_file = tokio::fs::File::create(&save_path)
-            .await
-            .map_err(|e| format!("创建本地文件失败: {}", e))?;
+        // 7. Create local file and write
+        let mut local_file = create_download_file(&save_path, Some(file_size)).await?;
 
         let start_time = Instant::now();
         let mut downloaded: i64 = 0;
 
-        // 流式拷贝
+        // Streaming copy
         use tokio::io::AsyncReadExt;
         use tokio::io::AsyncWriteExt;
 
@@ -144,30 +143,30 @@ impl Downloader for SFTPDownloader {
         loop {
             let n = remote_file.read(&mut buf)
                 .await
-                .map_err(|e| format!("读取远程文件失败: {}", e))?;
+                .map_err(|e| format!("Failed to read remote file: {}", e))?;
             if n == 0 {
                 break;
             }
 
             local_file.write_all(&buf[..n])
                 .await
-                .map_err(|e| format!("写入本地文件失败: {}", e))?;
+                .map_err(|e| format!("Failed to write local file: {}", e))?;
 
             downloaded += n as i64;
         }
 
         local_file.flush()
             .await
-            .map_err(|e| format!("刷新文件缓冲失败: {}", e))?;
+            .map_err(|e| format!("Failed to flush file buffer: {}", e))?;
 
         let elapsed = start_time.elapsed().as_secs_f64();
 
-        // 8. 验证大小
+        // 8. Verify size
         if file_size > 0 && downloaded != file_size {
-            return Err(format!("SFTP 下载不完整: {}/{} bytes", downloaded, file_size).into());
+            return Err(format!("SFTP download incomplete: {}/{} bytes", downloaded, file_size).into());
         }
 
-        // 9. 更新性能监控
+        // 9. Update performance monitor
         if let Some(ref monitor) = monitor {
             monitor.set_total_bytes(downloaded);
             monitor.add_bytes(downloaded).await;
@@ -177,10 +176,10 @@ impl Downloader for SFTPDownloader {
             (downloaded as f64 / 1024.0 / 1024.0) / elapsed
         } else { 0.0 };
 
-        eprintln!("SFTP 下载完成: {:.2} MB, 用时 {:.1}s, 速度 {:.2} MB/s",
+        eprintln!("SFTP download complete: {:.2} MB, elapsed {:.1}s, speed {:.2} MB/s",
             downloaded as f64 / 1024.0 / 1024.0, elapsed, speed_mbps);
 
-        // 10. 关闭 SSH 会话
+        // 10. Close SSH session
         let _ = session.disconnect(russh::Disconnect::ByApplication, "", "en")
             .await;
 

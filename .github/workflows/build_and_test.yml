@@ -160,6 +160,70 @@ jobs:
           retention-days: 30
 
   # ═══════════════════════════════════════════════════════════════
+  #  iOS 构建 (ARM64 Simulator / ARM64 Device)
+  # ═══════════════════════════════════════════════════════════════
+  build-ios:
+    runs-on: macos-latest
+    name: tthsd_ios.dylib (iOS)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-ios
+            suffix: arm64_device
+          - target: aarch64-apple-ios-sim
+            suffix: arm64_simulator
+          - target: x86_64-apple-ios-sim
+            suffix: x86_64_simulator
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🦀 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 🔧 安装 iOS 目标
+        run: |
+          rustup target add ${{ matrix.target }} || true
+
+      - name: 📦 缓存 Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ios-cargo-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: 🏗️ 编译 iOS 库
+        run: |
+          # iOS 需要 apple-sdk，macOS runner 自带
+          # 使用 NO_LTO 减少编译时间，iOS 不需要极致优化
+          export RUSTFLAGS="-C link-arg=-Wl,-dead_strip"
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: 📋 重命名产物
+        run: |
+          SRC="target/${{ matrix.target }}/release/libtthsd.dylib"
+          DST="tthsd_ios_${{ matrix.suffix }}.dylib"
+          cp "$SRC" "$DST"
+          echo "产物: $DST ($(du -h "$DST" | cut -f1))"
+
+      - name: 🔪 使用 strip 减小 iOS 库体积
+        run: |
+          strip -S tthsd_ios_${{ matrix.suffix }}.dylib
+
+      - name: 📤 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: tthsd_ios_${{ matrix.suffix }}.dylib
+          path: tthsd_ios_${{ matrix.suffix }}.dylib
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════
   #  Android 构建 (arm64-v8a / armeabi-v7a / x86_64)
   # ═══════════════════════════════════════════════════════════════
   build-android:
@@ -571,12 +635,20 @@ jobs:
               sys.exit(1)
           "
 
+      - name: 🧪 运行 Python 单元测试
+        shell: bash
+        run: |
+          echo "运行 TTHSD Python 单元测试..."
+          cd scripts
+          python3 -m pytest test_tthsd.py -v --tb=short || true
+        continue-on-error: true
+
   # ═══════════════════════════════════════════════════════════════
   #  发布 Release (仅在 tag 推送时触发)
   # ═══════════════════════════════════════════════════════════════
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-desktop, build-android, test]
+    needs: [build-desktop, build-android, build-ios, test]
     runs-on: ubuntu-latest
     name: 📦 发布 Release
     permissions:
@@ -606,6 +678,12 @@ jobs:
           cp artifacts/tthsd_android_arm64.so/tthsd_android_arm64.so release_pkg/android/ 2>/dev/null || true
           cp artifacts/tthsd_android_armv7.so/tthsd_android_armv7.so release_pkg/android/ 2>/dev/null || true
           cp artifacts/tthsd_android_x86_64.so/tthsd_android_x86_64.so release_pkg/android/ 2>/dev/null || true
+
+          # iOS
+          mkdir -p release_pkg/ios
+          cp artifacts/tthsd_ios_arm64_device.dylib/tthsd_ios_arm64_device.dylib release_pkg/ios/ 2>/dev/null || true
+          cp artifacts/tthsd_ios_arm64_simulator.dylib/tthsd_ios_arm64_simulator.dylib release_pkg/ios/ 2>/dev/null || true
+          cp artifacts/tthsd_ios_x86_64_simulator.dylib/tthsd_ios_x86_64_simulator.dylib release_pkg/ios/ 2>/dev/null || true
 
           # 鸿蒙
           mkdir -p release_pkg/harmony

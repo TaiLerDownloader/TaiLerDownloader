@@ -148,7 +148,7 @@ impl PerformanceMonitor {
             println!("峰值速度: {:.2} MB/s", peak_speed_mbps);
         }
         if let Some(chunk_downloads) = stats.get("chunk_downloads").and_then(|v| v.as_i64()) {
-            println!("分块下载数: {}", chunk_downloads);
+            println!("分块下载�? {}", chunk_downloads);
         }
         if let Some(failed_chunks) = stats.get("failed_chunks").and_then(|v| v.as_i64()) {
             println!("失败分块: {}", failed_chunks);

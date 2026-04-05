@@ -10,19 +10,17 @@ use super::ed2k_downloader::ED2KDownloader;
 use super::http3_downloader::HTTP3Downloader;
 use super::sftp_downloader::SFTPDownloader;
 
-/// 下载器工厂函数
+/// Downloader factory function
+/// Automatically routes to the appropriate downloader implementation based on URL scheme
+/// All downloaders implement the `Downloader` trait, callers don't need to know the concrete type
+/// Currently supported protocols:
+/// - `http://`, `https://` -> HTTPDownloader
 ///
-/// 根据第一个任务的 URL scheme 自动路由到对应的下载器实现。
-/// 所有下载器均实现了 `Downloader` trait，调用方不需要关心具体类型。
-///
-/// 目前支持的协议:
-/// - `http://`, `https://` → HTTPDownloader
-///
-/// 计划支持的协议:
-/// - `ftp://`, `ftps://`   → FTPDownloader
-/// - `sftp://`             → SFTPDownloader
-/// - `magnet:?`            → TorrentDownloader (BT/DHT/Magnet)
-/// - `ed2k://`             → ED2KDownloader
+/// Planned support:
+/// - `ftp://`, `ftps://`   -> FTPDownloader
+/// - `sftp://`             -> SFTPDownloader
+/// - `magnet:?`            -> TorrentDownloader (BT/DHT/Magnet)
+/// - `ed2k://`             -> ED2KDownloader
 pub async fn get_downloader(
     config: Arc<RwLock<DownloadConfig>>,
 ) -> Box<dyn Downloader> {
@@ -37,10 +35,10 @@ pub async fn get_downloader(
 
     match scheme {
         Protocol::Http => {
-            // 探测服务器是否支持 HTTP/3 (Alt-Svc: h3)
-            // 使用 500ms 超时的 HEAD 请求，失败或无 h3 则回退到 HTTPDownloader
+            // Probe server for HTTP/3 support (Alt-Svc: h3)
+            // Use 500ms timeout for HEAD request, fallback to HTTPDownloader if no h3
             if probe_h3_support(&url).await {
-                eprintln!("服务器支持 HTTP/3，使用 QUIC 下载");
+                eprintln!("Server supports HTTP/3, using QUIC download");
                 Box::new(HTTP3Downloader::new(config).await) as Box<dyn Downloader>
             } else {
                 Box::new(HTTPDownloader::new(config).await) as Box<dyn Downloader>
@@ -52,18 +50,18 @@ pub async fn get_downloader(
         Protocol::Metalink => Box::new(MetalinkDownloader::new(config).await),
         Protocol::Sftp => Box::new(SFTPDownloader::new(config).await),
         _ => {
-            eprintln!("警告: 未知协议 '{}', 回退到 HTTP 下载器", url.split("://").next().unwrap_or("unknown"));
+            eprintln!("Warning: Unknown protocol '{}', falling back to HTTP download", url.split("://").next().unwrap_or("unknown"));
             Box::new(HTTPDownloader::new(config).await)
         }
     }
 }
 
-/// 发送 HEAD 请求，检查 Alt-Svc 头是否包含 h3
-/// 超时 800ms，失败直接返回 false（不阻塞下载）
+/// Send HEAD request, check if Alt-Svc header contains h3
+/// Timeout 800ms, return false on failure (non-blocking)
 async fn probe_h3_support(url: &str) -> bool {
     use std::time::Duration;
 
-    // 复用全局 HTTP client（如果可用），否则临时创建
+    // Reuse global HTTP client (if available), otherwise create temporary
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_millis(800))
         .build()
@@ -74,7 +72,7 @@ async fn probe_h3_support(url: &str) -> bool {
 
     match client.head(url).send().await {
         Ok(resp) => {
-            // 检查 Alt-Svc 头：h3="..." 或 h3-29="..."
+            // Check Alt-Svc header: h3="..." or h3-29="..."
             resp.headers()
                 .get("alt-svc")
                 .and_then(|v| v.to_str().ok())
@@ -88,7 +86,7 @@ async fn probe_h3_support(url: &str) -> bool {
     }
 }
 
-/// 支持的下载协议枚举
+/// Supported download protocol enum
 #[derive(Debug, Clone, PartialEq)]
 pub enum Protocol {
     Http,
@@ -101,7 +99,7 @@ pub enum Protocol {
     Unknown,
 }
 
-/// 从 URL 字符串检测协议类型
+/// Detect protocol type from URL string
 fn detect_scheme(url: &str) -> Protocol {
     let lower = url.to_lowercase();
     if lower.starts_with("http://") || lower.starts_with("https://") {

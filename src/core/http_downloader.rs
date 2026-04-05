@@ -11,28 +11,61 @@ use super::downloader_interface::{Downloader, BaseDownloader};
 use super::downloader::{DownloadTask, DownloadChunk, DownloadConfig, Event, EventType};
 use super::performance_monitor::PerformanceMonitor;
 use super::send_message::send_message;
+use super::file_utils::create_download_file;
 
 const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// 全局 HTTP 客户端连接池 (所有 HTTPDownloader 实例共享)
+/// Global HTTP client connection pool (shared by all HTTPDownloader instances)
 static GLOBAL_HTTP_CLIENT: tokio::sync::OnceCell<Client> = tokio::sync::OnceCell::const_new();
 
-/// 获取全局复用的 HTTP Client (使用 Chrome 133 TLS 指纹伪装)
+/// Get global reusable HTTP Client (using Chrome 133 TLS fingerprint)
 async fn get_global_client() -> Client {
     GLOBAL_HTTP_CLIENT.get_or_init(|| async {
         use rquest_util::Emulation;
 
-        // 使用 Chrome 133 的 TLS/JA3/HTTP2 指纹，绕过 Cloudflare 等反爬系统
         Client::builder()
             .emulation(Emulation::Chrome133)
             .connect_timeout(Duration::from_secs(15))
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(32)
             .tcp_keepalive(Duration::from_secs(30))
+            .tcp_nodelay(true)
             .build()
             .expect("Failed to create HTTP client")
     }).await.clone()
 }
+
+/// Buffer Pool for memory reuse
+pub struct BufferPool {
+    pool: crossbeam::queue::SegQueue<Vec<u8>>,
+    chunk_size: usize,
+}
+
+impl BufferPool {
+    pub fn new(chunk_size: usize, initial_count: usize) -> Self {
+        let pool = crossbeam::queue::SegQueue::new();
+        for _ in 0..initial_count {
+            pool.push(vec![0; chunk_size]);
+        }
+        BufferPool { pool, chunk_size }
+    }
+
+    pub fn get(&self) -> Vec<u8> {
+        self.pool.pop().unwrap_or_else(|| vec![0; self.chunk_size])
+    }
+
+    pub fn put(&self, buffer: Vec<u8>) {
+        if buffer.len() == self.chunk_size {
+            self.pool.push(buffer);
+        }
+    }
+}
+
+/// Global Buffer Pool (reserved for future optimization)
+#[allow(dead_code)]
+static BUFFER_POOL: once_cell::sync::Lazy<BufferPool> = once_cell::sync::Lazy::new(|| {
+    BufferPool::new(64 * 1024, 256) // 64KB buffer, 256 initial
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadSnapshot {
@@ -123,15 +156,15 @@ pub struct HTTPDownloader {
     status: Option<DownloadStatus>,
 }
 
-/// 动态分片工作者 - 跟踪每个分块的实时下载进度
-/// progress 和 end_pos 使用 AtomicI64，允许主线程在不加锁的情况下
-/// 读取进度并动态修改 end_pos 来切分工作量
+/// Dynamic chunk worker - tracks real-time download progress for each chunk
+/// progress and end_pos use AtomicI64, allowing main thread to read progress
+/// and dynamically modify end_pos to split workload
 struct ChunkWorker {
-    /// 该分块的起始偏移量 (固定不变)
+    /// Start offset of this chunk (fixed)
     start_pos: i64,
-    /// 当前下载进度 (由下载线程原子更新)
+    /// Current download progress (atomically updated by download thread)
     progress: Arc<AtomicI64>,
-    /// 该分块的结束偏移量 (可被主线程动态缩减以分配给新 worker)
+    /// End offset of this chunk (can be dynamically reduced by main thread to reassign work)
     end_pos: Arc<AtomicI64>,
 }
 
@@ -144,7 +177,7 @@ impl ChunkWorker {
         }
     }
 
-    /// 剩余未下载的字节数
+    /// Remaining bytes not downloaded
     fn remaining(&self) -> i64 {
         let end = self.end_pos.load(Ordering::Relaxed);
         let progress = self.progress.load(Ordering::Relaxed);
@@ -152,9 +185,9 @@ impl ChunkWorker {
     }
 }
 
-/// 最小可切分大小 (2MB) - 低于此阈值不再切分
+/// Minimum reassign size (2MB) - below this threshold no more splitting
 const MIN_REASSIGN_SIZE: i64 = 2 * 1024 * 1024;
-/// 最大并发连接数上限
+/// Maximum concurrent connections
 const MAX_CONNECTIONS: usize = 64;
 impl HTTPDownloader {
     pub async fn new(config: Arc<RwLock<DownloadConfig>>) -> Self {
@@ -224,8 +257,8 @@ impl HTTPDownloader {
         chunks
     }
 
-    /// 下载一个分块 (动态版本)
-    /// 读取 worker 的 atomic end_pos，这样主线程可以随时缩减我们的工作范围
+    /// Download a chunk (dynamic version)
+    /// Reads worker's atomic end_pos so main thread can reduce our work range at any time
     async fn download_chunk_dynamic(
         &self,
         task: &DownloadTask,
@@ -236,6 +269,12 @@ impl HTTPDownloader {
         _total_size: i64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let current_end = end_pos.load(Ordering::Relaxed);
+        
+        let (global_headers, task_headers) = {
+            let cfg = self.base.config.as_ref().unwrap().read().await;
+            (cfg.headers.clone(), task.headers.clone())
+        };
+        
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"));
         headers.insert(RANGE, HeaderValue::from_str(&format!("bytes={}-{}", start, current_end))?);
@@ -243,6 +282,17 @@ impl HTTPDownloader {
         headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("identity"));
         headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+        
+        for (key, value) in global_headers {
+            if let (Ok(name), Ok(val)) = (key.parse::<reqwest::header::HeaderName>(), value.parse::<reqwest::header::HeaderValue>()) {
+                headers.insert(name, val);
+            }
+        }
+        for (key, value) in task_headers {
+            if let (Ok(name), Ok(val)) = (key.parse::<reqwest::header::HeaderName>(), value.parse::<reqwest::header::HeaderValue>()) {
+                headers.insert(name, val);
+            }
+        }
 
         let response = self.client
             .get(&task.url)
@@ -294,26 +344,26 @@ impl HTTPDownloader {
                 *lr = Instant::now();
             }
 
-            // 检查 end_pos 是否被主线程动态缩减了
+            // Check if end_pos was dynamically reduced by main thread
             let dynamic_end = end_pos.load(Ordering::Relaxed);
             let bytes_len = bytes.len() as i64;
 
             if current_pos + bytes_len > dynamic_end + 1 {
-                // 只写入到 dynamic_end 为止
+                // Only write up to dynamic_end
                 let usable = (dynamic_end + 1 - current_pos).max(0) as usize;
                 if usable > 0 {
                     writer.write_all(&bytes[..usable]).await?;
                     local_downloaded += usable as i64;
                     current_pos += usable as i64;
                 }
-                break; // 主线程已经把我们的范围缩减了，停止下载
+                break; // Main thread reduced our range, stop downloading
             }
 
             writer.write_all(&bytes).await?;
             local_downloaded += bytes_len;
             current_pos += bytes_len;
 
-            // 更新原子进度
+            // Update atomic progress
             progress.store(current_pos, Ordering::Relaxed);
 
             if local_downloaded >= BATCH_UPDATE_THRESHOLD {
@@ -328,7 +378,7 @@ impl HTTPDownloader {
                 local_downloaded = 0;
             }
 
-            // 检查是否停滞
+            // Check if stalled
             if stalled_tx.try_reserve().is_ok() {
                 return Err("connection stalled".into());
             }
@@ -344,7 +394,7 @@ impl HTTPDownloader {
             }
         }
 
-        // 最终进度更新
+        // Final progress update
         progress.store(current_pos, Ordering::Relaxed);
 
         Ok(())
@@ -390,30 +440,12 @@ impl Downloader for HTTPDownloader {
 
         self.status = Some(DownloadStatus::new(file_size));
         
-        // 更新全局监控的总大小
+        // Update global monitor total size
         if let Some(ref monitor) = self.monitor {
             monitor.set_total_bytes(file_size);
         }
 
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(&task.save_path).await?;
-
-        // FAT32 文件系统单文件上限为 4GB，超过时给出明确提示
-        const FAT32_MAX_FILE_SIZE: i64 = 4_294_967_295; // 4GB - 1 byte
-        
-        // 尝试预分配文件大小（提升多线程分块写入性能）
-        // 如果失败（例如 FAT32 文件系统不支持大文件），则跳过预分配继续下载
-        if let Err(e) = file.set_len(file_size as u64).await {
-            if file_size > FAT32_MAX_FILE_SIZE {
-                return Err(format!(
-                    "文件大小 ({:.2} GB) 超过 FAT32 文件系统的 4GB 限制，请将目标路径改为 NTFS/exFAT 分区",
-                    file_size as f64 / 1024.0 / 1024.0 / 1024.0
-                ).into());
-            }
-            eprintln!("警告: 无法预分配文件空间 ({}), 将继续下载", e);
-        }
+        let _file = create_download_file(&task.save_path, Some(file_size)).await?;
 
         let thread_count = if let Some(ref config) = self.base.config {
             let cfg = config.read().await;
@@ -432,7 +464,7 @@ impl Downloader for HTTPDownloader {
         let chunks = Self::create_chunks(file_size, chunk_size as i64, thread_count);
         let downloaded_size = Arc::new(RwLock::new(0i64));
 
-        // 创建动态分片工作者
+        // Create dynamic chunk workers
         let workers: Vec<Arc<ChunkWorker>> = chunks.iter().map(|c| {
             Arc::new(ChunkWorker::new(c.start_offset, c.end_offset))
         }).collect();
@@ -457,7 +489,7 @@ impl Downloader for HTTPDownloader {
             active_count += 1;
         }
 
-        // 动态分片: 当一个 worker 完成时，找到剩余最大的 worker 并切分
+        // Dynamic splitting: when one worker completes, find the largest remaining worker and split it
         while let Some(result) = join_set.join_next().await {
             if let Err(e) = result {
                 self.send_error_message(format!("worker error: {:?}", e)).await;
@@ -466,7 +498,7 @@ impl Downloader for HTTPDownloader {
                 }
             }
 
-            // 尝试从剩余最大的 worker 切分一半给新 worker
+            // Try to split from the worker with the most remaining work
             if active_count < MAX_CONNECTIONS {
                 let mut max_remaining = 0i64;
                 let mut max_worker: Option<&Arc<ChunkWorker>> = None;
@@ -485,10 +517,10 @@ impl Downloader for HTTPDownloader {
                         let current_end = w.end_pos.load(Ordering::Relaxed);
                         let mid = current_progress + (current_end - current_progress) / 2;
 
-                        // 缩减原 worker 的终点
+                        // Reduce original worker's end
                         w.end_pos.store(mid, Ordering::Relaxed);
 
-                        // 为新范围创建一个新 worker
+                        // Create new worker for the new range
                         let new_worker = Arc::new(ChunkWorker::new(mid + 1, current_end));
                         let task_clone = task.clone();
                         let downloaded_size_clone = downloaded_size.clone();
@@ -505,7 +537,7 @@ impl Downloader for HTTPDownloader {
                         });
                         active_count += 1;
 
-                        eprintln!("动态分片: 从 [{}-{}] 切分出 [{}-{}], 当前连接数: {}",
+                        eprintln!("Dynamic split: [{} - {}] split to [{} - {}], active connections: {}",
                             current_progress, mid, mid + 1, current_end, active_count);
                     }
                 }

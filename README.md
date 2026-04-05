@@ -2,11 +2,11 @@
   <h1>TTHSD Next (TT High Speed Downloader)</h1>
   <p>一个高性能、跨平台、多语言可调用的下载引擎内核</p>
   <img src="https://img.shields.io/badge/Rust-1.75+-orange.svg" alt="Rust Version">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android%20%7C%20HarmonyOS-blue.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android%20%7C%20iOS%20%7C%20HarmonyOS-blue.svg" alt="Platform">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green.svg" alt="License">
 </div>
 
-> Copyright © 2026 - present 23XRStudio 保留所有权利
+> Copyright © 2026 - present TT23XRStudio 保留所有权利
 
 ## 概述
 
@@ -26,6 +26,11 @@
 - **实时监控**: 提供实时进度监控和瞬时下载速度计算。
 - **断点续传**: 原生支持随时暂停、中断和恢复下载功能。
 - **高度自定义**: 支持自定义工作线程数和单次网络请求的分块(Chunk)大小。
+- **智能重试**: 自动重试机制，支持指数退避策略，有效应对网络波动。
+- **速度限制**: 支持全局和单任务下载速度限制，避免占用全部带宽。
+- **代理支持**: 支持 HTTP/HTTPS/SOCKS5 代理服务器配置。
+- **性能统计**: 提供实时下载性能数据统计，包括速度和进度。
+- **自定义请求头**: 支持全局和单任务级别的自定义 HTTP 请求头。
 - **多语言生态体系**: 
   - 提供标准的 C ABI 接口，支持 C/C++, Python, C# 等语言快速调用。
   - 原生暴露 JNI 接口，可直接在 Android / Java / Kotlin 应用中被集成。
@@ -159,3 +164,12 @@ cargo ndk --target arm64-v8a --platform 21 build --release --features android
 ## 📄 协议
 
 本项目基于 **[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)** 协议开源。这保证了核心底层下载软件始终维持开源与自由复制分发的权利，对代码的任意修改也请务必同等以 GPL 协议开源并向社区开放。
+
+## 其他
+
+### 文档：[文档](https://docss.sxxyrry.qzz.io/TTHSD/)
+### 文档（备用）：[文档](https://docss-23xr.pages.dev/TTHSD/)
+
+### **本项目隶属于 TT23XR Studio**
+
+**注意：本 README.MD 不会进行维护，只有文档站点中的文档会维护**

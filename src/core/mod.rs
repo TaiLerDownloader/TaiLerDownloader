@@ -1,5 +1,6 @@
 pub mod downloader;
 pub mod downloader_interface;
+pub mod file_utils;
 pub mod http_downloader;
 pub mod ftp_downloader;
 pub mod torrent_downloader;

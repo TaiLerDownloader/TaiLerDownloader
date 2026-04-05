@@ -1,0 +1,28 @@
+# iOS 构建配置 (macOS)
+# CI 环境下使用，macOS 自带 Apple SDK
+
+[target.aarch64-apple-ios]
+# iOS Device (ARM64) - 通常使用系统默认 linker
+
+[target.aarch64-apple-ios-sim]
+# iOS Simulator (ARM64) - 通常使用系统默认 linker
+
+[target.x86_64-apple-ios-sim]
+# iOS Simulator (x86_64) - 通常使用系统默认 linker
+
+# Android (macOS)
+[target.aarch64-linux-android]
+ar = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+linker = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android30-clang"
+
+[target.armv7-linux-androideabi]
+ar = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+linker = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/armv7a-linux-androideabi30-clang"
+
+[target.i686-linux-android]
+ar = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+linker = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/i686-linux-android30-clang"
+
+[target.x86_64-linux-android]
+ar = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar"
+linker = "$HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/x86_64-linux-android30-clang"

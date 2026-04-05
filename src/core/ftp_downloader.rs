@@ -6,10 +6,11 @@ use tokio::sync::RwLock;
 use super::downloader_interface::{Downloader, BaseDownloader};
 use super::downloader::{DownloadTask, DownloadConfig};
 use super::performance_monitor::PerformanceMonitor;
+use super::file_utils::create_download_file_sync;
 
-/// FTP 下载器
-/// 使用 suppaftp 的同步 API + tokio::task::spawn_blocking
-/// suppaftp 的 async tokio API 有复杂的泛型推断问题，同步 API 更稳定
+/// FTP Downloader
+/// Uses suppaftp synchronous API + tokio::task::spawn_blocking
+/// suppaftp async tokio API has complex generic inference issues, synchronous API is more stable
 pub struct FTPDownloader {
     base: BaseDownloader,
     monitor: Option<Arc<PerformanceMonitor>>,
@@ -29,13 +30,13 @@ impl FTPDownloader {
         }
     }
 
-    /// 解析 FTP URL 为 (host:port, path, username, password)
+    /// Parse FTP URL (host:port, path, username, password)
     fn parse_ftp_url(url: &str) -> Result<(String, String, String, String), Box<dyn std::error::Error + Send + Sync>> {
         let parsed = url::Url::parse(url)
-            .map_err(|e| format!("无效的 FTP URL: {}", e))?;
+            .map_err(|e| format!("Invalid FTP URL: {}", e))?;
 
         let host = parsed.host_str()
-            .ok_or("FTP URL 缺少主机名")?
+            .ok_or("FTP URL missing host")?
             .to_string();
         let port = parsed.port().unwrap_or(21);
         let path = parsed.path().to_string();
@@ -57,36 +58,35 @@ impl Downloader for FTPDownloader {
         let save_path = task.save_path.clone();
         let monitor = self.monitor.clone();
 
-        eprintln!("FTP 连接: {} (用户: {})", addr, username);
+        eprintln!("FTP connecting: {} (user: {})", addr, username);
 
-        // 在阻塞线程中执行同步 FTP 操作
+        // Execute synchronous FTP operations in blocking thread
         let result = tokio::task::spawn_blocking(move || -> Result<(i64, f64), String> {
             use suppaftp::FtpStream;
 
-            // 建立连接
+            // Establish connection
             let mut ftp = FtpStream::connect(&addr)
-                .map_err(|e| format!("FTP 连接失败: {}", e))?;
+                .map_err(|e| format!("FTP connection failed: {}", e))?;
 
-            // 登录
+            // Login
             ftp.login(&username, &password)
-                .map_err(|e| format!("FTP 登录失败: {}", e))?;
+                .map_err(|e| format!("FTP login failed: {}", e))?;
 
-            // 设置二进制传输模式
+            // Set binary transfer mode
             ftp.transfer_type(suppaftp::types::FileType::Binary)
-                .map_err(|e| format!("设置二进制模式失败: {}", e))?;
+                .map_err(|e| format!("Failed to set binary mode: {}", e))?;
 
-            // 获取文件大小
+            // Get file size
             let file_size = ftp.size(&path)
-                .map_err(|e| format!("获取文件大小失败: {}", e))? as i64;
+                .map_err(|e| format!("Failed to get file size: {}", e))? as i64;
 
-            eprintln!("FTP 文件大小: {} bytes ({:.2} MB)",
+            eprintln!("FTP file size: {} bytes ({:.2} MB)",
                 file_size, file_size as f64 / 1024.0 / 1024.0);
 
-            // 创建输出文件
-            let mut file = std::fs::File::create(&save_path)
-                .map_err(|e| format!("创建文件失败: {}", e))?;
+            // Create output file
+            let mut file = create_download_file_sync(&save_path, Some(file_size))?;
 
-            // 使用 retr 回调进行流式下载
+            // Use retr callback for streaming download
             let start_time = Instant::now();
             let downloaded: i64 = ftp.retr(&path, |reader| {
                 let mut buf = vec![0u8; 64 * 1024]; // 64KB buffer
@@ -106,24 +106,24 @@ impl Downloader for FTPDownloader {
                 }
 
                 Ok(total)
-            }).map_err(|e| format!("FTP 下载失败: {}", e))?;
+            }).map_err(|e| format!("FTP download failed: {}", e))?;
 
             let elapsed = start_time.elapsed().as_secs_f64();
 
-            // 断开连接
+            // Disconnect
             let _ = ftp.quit();
 
-            // 验证大小
+            // Verify size
             if downloaded != file_size {
-                return Err(format!("FTP 下载不完整: {}/{} bytes", downloaded, file_size));
+                return Err(format!("FTP download incomplete: {}/{} bytes", downloaded, file_size));
             }
 
             Ok((downloaded, elapsed))
-        }).await.map_err(|e| format!("FTP 下载线程异常: {}", e))?;
+        }).await.map_err(|e| format!("FTP download thread error: {}", e))?;
 
         match result {
             Ok((downloaded, elapsed)) => {
-                // 更新进度监控
+                // Update progress monitor
                 if let Some(ref monitor) = monitor {
                     monitor.set_total_bytes(downloaded);
                     monitor.add_bytes(downloaded).await;
@@ -133,7 +133,7 @@ impl Downloader for FTPDownloader {
                     (downloaded as f64 / 1024.0 / 1024.0) / elapsed
                 } else { 0.0 };
 
-                eprintln!("FTP 下载完成: {:.2} MB, 用时 {:.1}s, 速度 {:.2} MB/s",
+                eprintln!("FTP download complete: {:.2} MB, time: {:.1}s, speed: {:.2} MB/s",
                     downloaded as f64 / 1024.0 / 1024.0, elapsed, speed_mbps);
 
                 Ok(())

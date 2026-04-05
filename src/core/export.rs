@@ -35,6 +35,7 @@ pub extern "C" fn start_download(
     remote_callback_url: *const i8,
     use_socket: *const bool,
     is_multiple: *const bool,
+    headers_json: *const i8,
 ) -> i32 {
     if tasks_data.is_null() || task_count <= 0 {
         eprintln!("无效参数: tasks_data={:?}, task_count={}", tasks_data, task_count);
@@ -88,6 +89,18 @@ pub extern "C" fn start_download(
         None
     };
 
+    let global_headers = if !headers_json.is_null() {
+        let headers_str = unsafe { std::ffi::CStr::from_ptr(headers_json as *const u8 as *const std::ffi::c_char) };
+        match headers_str.to_str() {
+            Ok(s) if !s.is_empty() => {
+                serde_json::from_str::<std::collections::HashMap<String, String>>(s).unwrap_or_default()
+            }
+            _ => std::collections::HashMap::new(),
+        }
+    } else {
+        std::collections::HashMap::new()
+    };
+
     let config = DownloadConfig {
         tasks,
         thread_count: thread_count as usize,
@@ -98,6 +111,12 @@ pub extern "C" fn start_download(
         use_socket: use_socket_val,
         show_name: String::new(),
         user_agent: UA.to_string(),
+        max_retries: 3,
+        retry_delay_ms: 1000,
+        max_retry_delay_ms: 30000,
+        speed_limit_bps: 0,
+        proxy_url: None,
+        headers: global_headers,
     };
 
     let downloader = Arc::new(RwLock::new(HSDownloader::new(config)));
@@ -157,6 +176,7 @@ pub extern "C" fn get_downloader(
     _user_agent: *const i8,
     remote_callback_url: *const i8,
     use_socket: *const bool,
+    headers_json: *const i8,
 ) -> i32 {
     if tasks_data.is_null() || task_count <= 0 {
         return -1;
@@ -197,6 +217,18 @@ pub extern "C" fn get_downloader(
         None
     };
 
+    let global_headers = if !headers_json.is_null() {
+        let headers_str = unsafe { std::ffi::CStr::from_ptr(headers_json as *const u8 as *const std::ffi::c_char) };
+        match headers_str.to_str() {
+            Ok(s) if !s.is_empty() => {
+                serde_json::from_str::<std::collections::HashMap<String, String>>(s).unwrap_or_default()
+            }
+            _ => std::collections::HashMap::new(),
+        }
+    } else {
+        std::collections::HashMap::new()
+    };
+
     let config = DownloadConfig {
         tasks,
         thread_count: thread_count as usize,
@@ -207,6 +239,12 @@ pub extern "C" fn get_downloader(
         use_socket: use_socket_val,
         show_name: String::new(),
         user_agent: UA.to_string(),
+        max_retries: 3,
+        retry_delay_ms: 1000,
+        max_retry_delay_ms: 30000,
+        speed_limit_bps: 0,
+        proxy_url: None,
+        headers: global_headers,
     };
 
     let downloader = Arc::new(RwLock::new(HSDownloader::new(config)));
@@ -357,5 +395,104 @@ pub extern "C" fn stop_download(id: i32) -> i32 {
             }
         }
         None => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn set_speed_limit(id: i32, speed_limit_bps: u64) -> i32 {
+    let downloaders = get_downloaders().lock().unwrap();
+    let downloader = downloaders.get(&id).cloned();
+    drop(downloaders);
+
+    match downloader {
+        Some(d) => {
+            RUNTIME.block_on(async {
+                let cfg = d.write().await;
+                cfg.config.write().await.speed_limit_bps = speed_limit_bps;
+            });
+            0
+        }
+        None => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn set_proxy(id: i32, proxy_url: *const i8) -> i32 {
+    let downloaders = get_downloaders().lock().unwrap();
+    let downloader = downloaders.get(&id).cloned();
+    drop(downloaders);
+
+    match downloader {
+        Some(d) => {
+            let proxy = if !proxy_url.is_null() {
+                let url_str = unsafe { std::ffi::CStr::from_ptr(proxy_url as *const u8 as *const std::ffi::c_char) };
+                match url_str.to_str() {
+                    Ok(s) if !s.is_empty() => Some(s.to_string()),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            RUNTIME.block_on(async {
+                let cfg = d.write().await;
+                cfg.config.write().await.proxy_url = proxy;
+            });
+            0
+        }
+        None => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn set_retry_config(id: i32, max_retries: u32, retry_delay_ms: u64, max_retry_delay_ms: u64) -> i32 {
+    let downloaders = get_downloaders().lock().unwrap();
+    let downloader = downloaders.get(&id).cloned();
+    drop(downloaders);
+
+    match downloader {
+        Some(d) => {
+            RUNTIME.block_on(async {
+                let cfg = d.write().await;
+                let mut config = cfg.config.write().await;
+                config.max_retries = max_retries as usize;
+                config.retry_delay_ms = retry_delay_ms;
+                config.max_retry_delay_ms = max_retry_delay_ms;
+            });
+            0
+        }
+        None => -1,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn get_performance_stats(id: i32) -> *mut std::ffi::c_char {
+    let downloaders = get_downloaders().lock().unwrap();
+    let downloader = downloaders.get(&id).cloned();
+    drop(downloaders);
+
+    match downloader {
+        Some(d) => {
+            let stats = RUNTIME.block_on(async {
+                d.read().await.get_snapshot("").await
+            });
+
+            match stats {
+                Some(s) => {
+                    let json = serde_json::to_string(&s).unwrap_or_default();
+                    let c_string = std::ffi::CString::new(json).unwrap_or_default();
+                    c_string.into_raw() as *mut std::ffi::c_char
+                }
+                None => std::ffi::CString::new("{}").unwrap().into_raw() as *mut std::ffi::c_char,
+            }
+        }
+        None => std::ffi::CString::new("{}").unwrap().into_raw() as *mut std::ffi::c_char,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn free_string(s: *mut std::ffi::c_char) {
+    if !s.is_null() {
+        unsafe { drop(std::ffi::CString::from_raw(s)) };
     }
 }
