@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "websocket")]
 use super::websocket_client::WebSocketClient;
+#[cfg(feature = "socket")]
 use super::socket_client::SocketClient;
 use super::send_message::send_message;
 use super::performance_monitor::get_global_monitor;
@@ -85,8 +87,14 @@ pub struct ProgressEvent {
 
 pub struct HSDownloader {
     pub config: Arc<RwLock<DownloadConfig>>,
+    #[cfg(feature = "websocket")]
     pub ws_client: Option<Arc<tokio::sync::Mutex<WebSocketClient>>>,
+    #[cfg(not(feature = "websocket"))]
+    pub ws_client: Option<Arc<tokio::sync::Mutex<()>>>,
+    #[cfg(feature = "socket")]
     pub socket_client: Option<Arc<tokio::sync::Mutex<SocketClient>>>,
+    #[cfg(not(feature = "socket"))]
+    pub socket_client: Option<Arc<tokio::sync::Mutex<()>>>,
     pub cancel_token: Arc<tokio::sync::Mutex<Option<tokio_util::sync::CancellationToken>>>,
     pub current_task_index: Arc<tokio::sync::Mutex<usize>>,
 }
@@ -111,9 +119,12 @@ impl HSDownloader {
             if cfg.use_callback_url {
                 if let Some(ref callback_url) = cfg.callback_url {
                     if let Some(use_socket) = cfg.use_socket {
+                        #[cfg(feature = "socket")]
                         if use_socket {
                             socket_client = Some(Arc::new(tokio::sync::Mutex::new(SocketClient::new(callback_url.clone()))));
-                        } else {
+                        }
+                        #[cfg(feature = "websocket")]
+                        if !use_socket {
                             ws_client = Some(Arc::new(tokio::sync::Mutex::new(WebSocketClient::new(callback_url.clone()))));
                         }
                     }
@@ -394,8 +405,10 @@ impl HSDownloader {
         index: usize,
         token: tokio_util::sync::CancellationToken,
         config: Arc<RwLock<DownloadConfig>>,
-        ws_client: Option<Arc<Mutex<WebSocketClient>>>,
-        socket_client: Option<Arc<Mutex<SocketClient>>>,
+        #[cfg(feature = "websocket")] ws_client: Option<Arc<Mutex<WebSocketClient>>>,
+        #[cfg(not(feature = "websocket"))] ws_client: Option<Arc<Mutex<()>>>,
+        #[cfg(feature = "socket")] socket_client: Option<Arc<Mutex<SocketClient>>>,
+        #[cfg(not(feature = "socket"))] socket_client: Option<Arc<Mutex<()>>>,
     ) {
         let total = {
             let cfg = config.read().await;
@@ -578,11 +591,13 @@ impl HSDownloader {
         self.pause_download().await;
 
         // 关闭网络连接
+        #[cfg(feature = "websocket")]
         if let Some(ref ws_client) = self.ws_client {
             let client = ws_client.lock().await;
             client.close();
         }
 
+        #[cfg(feature = "socket")]
         if let Some(ref socket_client) = self.socket_client {
             let client = socket_client.lock().await;
             client.close();

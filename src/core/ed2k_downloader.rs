@@ -1,3 +1,5 @@
+#![cfg(feature = "ed2k")]
+
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

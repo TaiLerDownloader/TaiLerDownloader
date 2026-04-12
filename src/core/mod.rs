@@ -15,6 +15,11 @@ pub mod performance_monitor;
 pub mod get_downloader;
 pub mod export;
 pub mod license_output;
+pub mod metrics;
+pub mod logging;
+pub mod progress_tracker;
+pub mod buffer_pool;
+pub mod adaptive_concurrency;
 
 #[cfg(feature = "android")]
 pub mod android_export;

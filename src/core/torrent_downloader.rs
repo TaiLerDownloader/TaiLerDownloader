@@ -1,3 +1,5 @@
+#![cfg(feature = "torrent")]
+
 use std::sync::Arc;
 use std::path::PathBuf;
 use tokio::sync::RwLock;

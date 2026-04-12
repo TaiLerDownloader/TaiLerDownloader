@@ -1,6 +1,6 @@
 # TTHSD Next 更新日志
 
-## 0.1.0-dev.5 (2026-04-05)
+## 0.1.0-dev.6 (2026-04-12)
 
 ### 新增功能
 
@@ -27,6 +27,41 @@
   - 任务级 Headers：每个任务独立，通过任务数据的 `headers` 字段设置
   - 任务级会覆盖全局同名 Header
 
+- **Prometheus 指标模块** (`src/core/metrics.rs`)
+  - 全局指标收集：总下载量、速度、峰值速度、活跃/完成/失败任务数
+  - 支持 Prometheus 文本格式和 JSON 格式导出
+  - 原子操作，无锁竞争
+
+- **结构化日志模块** (`src/core/logging.rs`)
+  - 支持多级别：TRACE, DEBUG, INFO, WARN, ERROR
+  - JSON 格式输出，包含时间戳、目标、消息、任务ID
+
+- **统一进度追踪器** (`src/core/progress_tracker.rs`)
+  - 任务级进度管理：状态、总字节、已下载、速度
+  - 状态枚举：Pending, Running, Paused, Completed, Failed, Cancelled
+
+- **Buffer 对象池** (`src/core/buffer_pool.rs`)
+  - HTTP Buffer 池：64KB × 256
+  - 文件 Buffer 池：64KB × 128
+
+- **自适应并发控制** (`src/core/adaptive_concurrency.rs`)
+  - 基于网络速度历史的动态线程调整
+  - 支持设定目标速度
+
+- **SFTP 主机密钥验证**
+  - KnownHosts 存储：记录已验证的主机指纹
+  - SHA256 指纹验证，检测 MITM 攻击
+
+### 新增模块
+
+| 模块 | 功能 |
+|------|------|
+| `metrics.rs` | Prometheus 指标 |
+| `logging.rs` | 结构化日志 |
+| `progress_tracker.rs` | 统一进度追踪 |
+| `buffer_pool.rs` | Buffer 对象池 |
+| `adaptive_concurrency.rs` | 自适应并发 |
+
 ### API 变更
 
 新增 ABI 函数：
@@ -41,12 +76,33 @@
 
 `start_download` / `get_downloader` 新增参数 `headersJson`
 
+### 条件编译
+
+```toml
+[features]
+default = ["full"]
+full = ["ftp", "sftp", "torrent", "metalink", "ed2k", "http3", "websocket", "socket"]
+
+ftp = ["dep:suppaftp"]
+sftp = ["dep:russh", "dep:russh-sftp"]
+torrent = ["dep:librqbit"]
+metalink = ["dep:metalink"]
+http3 = ["dep:h3", "dep:h3-quinn", "dep:quinn", "dep:rustls", "dep:webpki-roots"]
+websocket = ["dep:tokio-tungstenite"]
+socket = ["dep:tokio-tungstenite"]
+android = ["dep:jni"]
+```
+
+- `--no-default-features` - 仅 HTTP/HTTPS
+- `--features "ftp"` - 启用 FTP
+- `--features full` - 全部协议
+
 ### 错误处理改进
 
 - 改进的错误信息格式，更友好的错误描述
 - 支持常见 HTTP 错误码（502/503/504/404/403）的中文提示
 - 网络错误（连接拒绝、超时、无法路由等）的清晰描述
-- 文件系统错误（磁盘空间不足、权限拒绝等）的明确提示
+- 文件系统错误（��盘空间不足、权限拒绝等）的明确提示
 
 ### 性能优化
 
@@ -61,7 +117,7 @@
 
 ---
 
-## 0.1.0-dev.4
+## 0.1.0-dev.5 (2026-04-05)
 
 ### 支持的协议
 

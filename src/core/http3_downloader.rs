@@ -1,3 +1,5 @@
+#![cfg(feature = "http3")]
+
 use std::sync::Arc;
 use std::net::SocketAddr;
 use tokio::sync::RwLock;

@@ -1,3 +1,5 @@
+#![cfg(feature = "metalink")]
+
 use std::sync::Arc;
 use std::str::FromStr;
 use tokio::sync::RwLock;

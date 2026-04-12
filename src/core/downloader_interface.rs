@@ -1,7 +1,9 @@
 use std::time::Instant;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+#[cfg(feature = "websocket")]
 use super::websocket_client::WebSocketClient;
+#[cfg(feature = "socket")]
 use super::socket_client::SocketClient;
 use super::downloader::{DownloadChunk, DownloadConfig, DownloadTask};
 
@@ -19,8 +21,14 @@ pub struct BaseDownloader {
     pub last_downloaded: i64,
     pub start_time: Instant,
     pub chunks: Vec<DownloadChunk>,
+    #[cfg(feature = "websocket")]
     pub ws_client: Option<Arc<tokio::sync::Mutex<WebSocketClient>>>,
+    #[cfg(not(feature = "websocket"))]
+    pub ws_client: Option<Arc<tokio::sync::Mutex<()>>>,
+    #[cfg(feature = "socket")]
     pub socket_client: Option<Arc<tokio::sync::Mutex<SocketClient>>>,
+    #[cfg(not(feature = "socket"))]
+    pub socket_client: Option<Arc<tokio::sync::Mutex<()>>>,
     pub config: Option<Arc<RwLock<DownloadConfig>>>,
     pub running: bool,
 }

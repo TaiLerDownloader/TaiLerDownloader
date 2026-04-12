@@ -676,7 +676,7 @@ This Additional Permission is written in both Chinese and English. In the event 
 
 - **“本软件”**：指由 TT23XR Studio 发行、明确声明受本附加权限约束且版权归 TT23XR Studio 所有的源代码及编译后的二进制形式。
 - **“官方二进制库”**：指 TT23XR Studio 通过其官方渠道（例如 GitHub Releases）发布的、未经任何修改的预编译二进制库文件（包括但不限于 `.dll`、`.so`、`.dylib` 等形式）。自行从源代码编译得到的库文件（即使未修改源代码）**不属于**官方二进制库。
-- **“未经修改”**：对官方二进制库而言，指未以任何方式变更其二进制内容（包括但不限于反编译、修改、修补、重新打包）。对源代码而言，指未以任何方式变更源代码内容（包括但不限于新增、删除、重写任何函数、类、模块或数据结构）。任何改变编译参数（如优化级别、宏定义）后重新编译得到的库，亦视为“修改”。
+- **“未经修改”**：对官方二进制库而言，指未以任何方式变更其二进制内容（包括但不限于反编译、修改、修补、重新打包/编译）。对源代码而言，指未以任何方式变更源代码内容（包括但不限于新增、删除、重写任何函数、类、模块或数据结构）。任何改变编译参数（如优化级别、宏定义）后重新编译得到的库，亦视为“修改”。
 - **“链接”**：指将本软件的官方二进制库与其他独立模块组合成一个可执行程序或库的任何方式，包括但不限于静态链接、动态链接、隐式链接、显式加载等。本附加权限**不要求**用户必须能够替换该二进制库。
 
 **2. 附加权限内容**
@@ -707,9 +707,28 @@ This Additional Permission is written in both Chinese and English. In the event 
 
 如果您违反本附加权限的任何规定，您依据本附加权限获得的所有权利将自动终止（同时依据 AGPL v3.0 第8节，您在本软件下的所有许可也可能终止）。对于遵循 AGPL v3.0 的纯开源使用，本附加权限的终止不影响 AGPL v3.0 本身的效力。
 
+尽管有上述规定，若您违反本附加权限的非实质性条款（如署名位置不当），且在收到作者通知后30日内予以纠正，则您的权利自动恢复。作者保留对恶意、反复违规者严格执行终止条款的权利。
+
 **6. 无其他限制**
 
 本附加权限不限制您以 AGPL v3.0 规定的原始方式（即完整遵守 AGPL 的开源要求）使用、修改和分发本软件。您始终可以选择不使用本附加权限，而单纯遵守 AGPL v3.0 的原始条款。
+
+---
+
+### 关于商业使用的说明
+
+本项目默认采用 GNU AGPL v3.0 + 附加权限进行许可。  
+该协议已经允许你在**不修改源码、使用官方二进制库的前提下闭源使用**，无需任何额外许可。
+
+如果你因公司内部政策等原因，**认为必须获得一份书面的商业许可**，请注意：
+
+- 作者发布本项目时为未成年人，**本项目的开发与发布已获得法定代理人的知情与同意**；
+- 尽管如此，本项目**目前不提供任何形式的商业许可销售**；
+- 建议你直接遵守 AGPL v3.0 + 附加权限，该协议已覆盖绝大多数商业使用场景。
+
+若你通过公开信息或推算发现作者已成年而此处尚未更新，可提醒作者修改，并届时获取**一份书面的商业许可**。
+
+如有疑问，可通过 [B站链接](https://space.bilibili.com/1532090388) 联系作者（但不保证回复时效）。
 
 ---
 
@@ -725,7 +744,7 @@ Pursuant to Section 7 of the GNU Affero General Public License version 3 ("AGPL 
 
 - **"The Software"** : The source code and compiled binary forms distributed by TT23XR Studio that are explicitly stated to be subject to this Additional Permission and whose copyright is owned by TT23XR Studio.
 - **"Official Binary Library"** : A pre-compiled binary library file (including but not limited to `.dll`, `.so`, `.dylib` ) distributed by TT23XR Studio through its official channels (e.g., GitHub Releases) without any modification. Libraries compiled by yourself from the source code (even without changes) are **not** Official Binary Libraries.
-- **"Unmodified"** : With respect to an Official Binary Library, means that its binary content has not been altered in any way (including but not limited to decompilation, modification, patching, repackaging). With respect to source code, means that the source code has not been altered in any way (including but not limited to adding, deleting, or rewriting any function, class, module, or data structure). Any change to compilation parameters (e.g., optimization level, macro definitions) resulting in a rebuilt library is also considered a modification.
+- **"Unmodified"** : With respect to an Official Binary Library, means that its binary content has not been altered in any way (including but not limited to decompilation, modification, patching, repackaging / rebuilding). With respect to source code, means that the source code has not been altered in any way (including but not limited to adding, deleting, or rewriting any function, class, module, or data structure). Any change to compilation parameters (e.g., optimization level, macro definitions) resulting in a rebuilt library is also considered a modification.
 - **"Linking"** : Any means of combining the Official Binary Library of The Software with other independent modules into a single executable or library, including but not limited to static linking, dynamic linking, implicit linking, explicit loading. This Additional Permission **does not require** that users be able to replace the binary library.
 
 **2. Additional Permission**
@@ -756,6 +775,25 @@ This Additional Permission applies only to code whose complete copyright is owne
 
 If you violate any provision of this Additional Permission, all rights granted to you under this Additional Permission will automatically terminate (and under Section 8 of AGPL v3.0, all your licenses under The Software may also terminate). For purely open-source use that complies with AGPL v3.0, termination of this Additional Permission does not affect the effectiveness of AGPL v3.0 itself.
 
+Notwithstanding the foregoing, if you violate a non-substantive provision of this Additional Permission (e.g., improper placement of the required acknowledgment) and you cure such violation within 30 days of receiving notice from the author, your rights shall be automatically reinstated. The author reserves the right to strictly enforce the termination provisions against malicious or repeat violators.
+
 **6. No Other Restrictions**
 
 This Additional Permission does not restrict you from using, modifying, and distributing The Software in the original manner prescribed by AGPL v3.0 (i.e., fully complying with AGPL's open-source requirements). You may always choose not to use this Additional Permission and instead comply solely with the original terms of AGPL v3.0.
+
+---
+
+### Regarding Commercial Use
+
+This project is licensed under GNU AGPL v3.0 with Additional Permissions by default.  
+This license already permits you to **use the software in closed-source applications without modifying the source code, provided you use the official binary libraries**—no additional license is required.
+
+If, due to internal company policies or other reasons, you **believe a written commercial license is necessary**, please note the following:
+
+- The author was a minor at the time this project was published. **The development and release of this project have been made with the knowledge and consent of the author's legal guardian.**
+- Nevertheless, this project **does not currently offer any form of commercial license for sale**.
+- It is recommended that you comply directly with AGPL v3.0 and the Additional Permissions, which already cover the vast majority of commercial use scenarios.
+
+If you obtain information or deduce that the author has reached the age of majority and this text has not been updated, you may remind the author to revise it and obtain **a written commercial license** at that time.
+
+For inquiries, you may contact the author via [Bilibili link](https://space.bilibili.com/1532090388) (please note that response is not guaranteed).

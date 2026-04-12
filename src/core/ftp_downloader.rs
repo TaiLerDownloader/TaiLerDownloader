@@ -1,3 +1,5 @@
+#![cfg(feature = "ftp")]
+
 use std::sync::Arc;
 use std::time::Instant;
 use std::io::Write;
@@ -7,6 +9,10 @@ use super::downloader_interface::{Downloader, BaseDownloader};
 use super::downloader::{DownloadTask, DownloadConfig};
 use super::performance_monitor::PerformanceMonitor;
 use super::file_utils::create_download_file_sync;
+#[allow(unused_imports)]
+use suppaftp::FtpStream;
+#[allow(unused_imports)]
+use suppaftp::types::FileType;
 
 /// FTP Downloader
 /// Uses suppaftp synchronous API + tokio::task::spawn_blocking
@@ -73,7 +79,7 @@ impl Downloader for FTPDownloader {
                 .map_err(|e| format!("FTP login failed: {}", e))?;
 
             // Set binary transfer mode
-            ftp.transfer_type(suppaftp::types::FileType::Binary)
+            ftp.transfer_type(FileType::Binary)
                 .map_err(|e| format!("Failed to set binary mode: {}", e))?;
 
             // Get file size

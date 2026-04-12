@@ -2,15 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use super::downloader::{DownloadConfig, Event};
+#[cfg(feature = "websocket")]
 use super::websocket_client::WebSocketClient;
+#[cfg(feature = "socket")]
 use super::socket_client::SocketClient;
 
 pub async fn send_message(
     event: Event,
     data: HashMap<String, serde_json::Value>,
     config: &Arc<RwLock<DownloadConfig>>,
-    ws_client: &Option<Arc<tokio::sync::Mutex<WebSocketClient>>>,
-    socket_client: &Option<Arc<tokio::sync::Mutex<SocketClient>>>,
+    #[cfg(feature = "websocket")] ws_client: &Option<Arc<tokio::sync::Mutex<WebSocketClient>>>,
+    #[cfg(not(feature = "websocket"))] ws_client: &Option<Arc<tokio::sync::Mutex<()>>>,
+    #[cfg(feature = "socket")] socket_client: &Option<Arc<tokio::sync::Mutex<SocketClient>>>,
+    #[cfg(not(feature = "socket"))] socket_client: &Option<Arc<tokio::sync::Mutex<()>>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut is_called = false;
 
@@ -38,6 +42,7 @@ pub async fn send_message(
         }
 
         // 发送WebSocket消息
+        #[cfg(feature = "websocket")]
         if let Some(ref ws_client) = ws_client_clone {
             if config.callback_url.is_some() {
                 let client = ws_client.lock().await;
@@ -47,6 +52,7 @@ pub async fn send_message(
         }
 
         // 发送Socket消息
+        #[cfg(feature = "socket")]
         if let Some(ref socket_client) = socket_client_clone {
             if config.callback_url.is_some() {
                 let client = socket_client.lock().await;
