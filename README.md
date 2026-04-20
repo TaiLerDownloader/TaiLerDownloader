@@ -174,8 +174,8 @@ cargo ndk --target arm64-v8a --platform 21 build --release --features android
 
 ## 其他
 
-### 文档：[文档](https://docss.sxxyrry.qzz.io/TaiLerDownloader/)
-### 文档（备用）：[文档](https://docss-23xr.pages.dev/TaiLerDownloader/)
+### 文档：[文档](https://docss.sxxyrry.qzz.io/TLD/)
+### 文档（备用）：[文档](https://docss-23xr.pages.dev/TLD/)
 
 ### **本项目隶属于 TT23XR Studio**
 
