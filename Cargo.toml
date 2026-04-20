@@ -1,12 +1,15 @@
 [package]
-name = "tthsd"
+name = "TaiLerDownloader"
 authors = ["TT23XR Studio", "Sxxyrry", "Wangziqi0"]
 version = "0.1.0-dev.6"
 edition = "2024"
 license = "GNU Affero General Public License v3.0"
 
+[lints.rust]
+non_snake_case = "allow"
+
 [lib]
-name = "tthsd"
+name = "TaiLerDownloader"
 crate-type = ["cdylib"]
 
 [dependencies]

@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-TTHSD Next 综合功能测试脚本
+TLD 综合功能测试脚本
 ============================
 覆盖四大验证类别：功能验证、性能验证、兼容性验证、稳定性验证
 
@@ -10,13 +9,13 @@ TTHSD Next 综合功能测试脚本
 
 需要的环境:
     - 本地 HTTP 测试服务器运行在 127.0.0.1:18080
-    - libtthsd.so 动态库在 /home/amd/TTSD/ 下
-    - TTHSD_interface.py 在同一目录
+    - libTLD.so 动态库在 /home/amd/TTSD/ 下
+    - TLD_interface.py 在同一目录
 """
 
 import hashlib
 import json
-import os
+import os # pyright: ignore[reportUnusedImport]
 import sys
 import time
 import threading
@@ -24,10 +23,11 @@ import traceback
 import resource
 from pathlib import Path
 from datetime import datetime
+from typing import Any
 
 # 添加同目录到 path
 sys.path.insert(0, str(Path(__file__).parent))
-from TTHSD_interface import TTHSDownloader, EventLogger
+from tld_interface import TLDownloader, EventLogger # pyright: ignore[reportUnusedImport]
 
 # ──────────────────────────────────────────────────────────────────
 # 配置
@@ -38,7 +38,7 @@ PUBLIC_TEST_URLS = {
     "5mb": "http://ipv4.download.thinkbroadband.com/5MB.zip",
     "10mb": "http://ipv4.download.thinkbroadband.com/10MB.zip",
 }
-DLL_PATH = Path("/home/amd/TTSD/libtthsd.so")
+DLL_PATH = Path("/home/amd/TTSD/libTLD.so")
 DOWNLOAD_DIR = Path("/home/amd/TTSD/test_downloads")
 MANIFEST_PATH = Path("/home/amd/TTSD/test_files/manifest.json")
 
@@ -69,7 +69,7 @@ def clean_download_dir():
         if f.is_file():
             f.unlink()
 
-def load_manifest() -> dict:
+def load_manifest() -> dict[str, dict[str, str | int]]:
     """加载测试文件 manifest"""
     with open(MANIFEST_PATH) as f:
         return json.load(f)
@@ -91,14 +91,14 @@ def print_result(name: str, passed: bool, detail: str = ""):
 class EventCollector:
     """收集所有回调事件，供测试断言使用"""
     def __init__(self):
-        self.events = []
+        self.events: list[dict[str, Any]] = []
         self.done = threading.Event()
-        self.errors = []
-        self.start_time = time.time()
-        self.first_update_time = None
+        self.errors: list[dict[str, Any]] = []
+        self.start_time: float = time.time()
+        self.first_update_time: float | None = None
 
-    def __call__(self, event: dict, msg: dict) -> None:
-        event_type = event.get("event_type", event.get("Type", "?"))
+    def __call__(self, event: dict[str, Any], msg: dict[str, Any]) -> None:
+        event_type: str = event.get("event_type", event.get("Type", "?"))
         self.events.append({"event": event, "msg": msg, "time": time.time()})
 
         if event_type == "update" and self.first_update_time is None:
@@ -109,7 +109,7 @@ class EventCollector:
         elif event_type == "err":
             self.errors.append(msg)
 
-    def wait(self, timeout=30):
+    def wait(self, timeout: int=30):
         return self.done.wait(timeout=timeout)
 
     def get_event_types(self) -> list[str]:
@@ -131,10 +131,10 @@ def test_single_file_download_md5():
     filename = "medium_1mb.bin"
     url = f"{LOCAL_BASE_URL}/{filename}"
     save_path = str(DOWNLOAD_DIR / filename)
-    expected_md5 = manifest[filename]["md5"]
+    expected_md5: str = manifest[filename]["md5"] # pyright: ignore[reportAssignmentType]
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
+    with TLDownloader(DLL_PATH) as dl:
         dl_id = dl.start_download(
             urls=[url],
             save_paths=[save_path],
@@ -162,7 +162,7 @@ def test_multi_file_sequential():
     save_paths = [str(DOWNLOAD_DIR / f) for f in files]
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
+    with TLDownloader(DLL_PATH) as dl:
         dl_id = dl.start_download(
             urls=urls,
             save_paths=save_paths,
@@ -196,8 +196,8 @@ def test_callback_events():
     save_path = str(DOWNLOAD_DIR / "callback_test.bin")
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=2,
@@ -213,7 +213,7 @@ def test_callback_events():
     has_end = "end" in event_types
 
     passed = has_start and has_end
-    detail_parts = []
+    detail_parts: list[str] = []
     for name, val in [("start", has_start), ("startOne", has_start_one),
                        ("endOne", has_end_one), ("end", has_end)]:
         icon = "✓" if val else "✗"
@@ -231,8 +231,8 @@ def test_error_handling_404():
     save_path = str(DOWNLOAD_DIR / "should_not_exist.bin")
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=2,
@@ -251,13 +251,13 @@ def test_error_handling_404():
 def test_get_downloader_then_start():
     """测试 5: 先创建后启动"""
     clean_download_dir()
-    manifest = load_manifest()
+    manifest = load_manifest() # pyright: ignore[reportUnusedVariable]
 
     url = f"{LOCAL_BASE_URL}/small_100kb.bin"
     save_path = str(DOWNLOAD_DIR / "deferred_start.bin")
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
+    with TLDownloader(DLL_PATH) as dl:
         dl_id = dl.get_downloader(
             urls=[url],
             save_paths=[save_path],
@@ -294,8 +294,8 @@ def test_throughput_local():
     collector = EventCollector()
     start_time = time.time()
 
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=8,
@@ -314,20 +314,20 @@ def test_throughput_local():
     return passed
 
 
-def test_memory_usage():
+def test_memory_usage() -> bool:
     """测试 7: 内存占用监控"""
     clean_download_dir()
 
     # 测量 baseline
-    baseline_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    baseline_rss: int = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
 
     files = ["medium_1mb.bin", "large_10mb.bin"]
     urls = [f"{LOCAL_BASE_URL}/{f}" for f in files]
     save_paths = [str(DOWNLOAD_DIR / f"mem_{f}") for f in files]
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=urls,
             save_paths=save_paths,
             thread_count=8,
@@ -336,7 +336,7 @@ def test_memory_usage():
         )
         collector.wait(timeout=60)
 
-    peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    peak_rss: int = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
     delta_mb = (peak_rss - baseline_rss) / 1024  # KB -> MB
 
     passed = delta_mb < 200  # 内存增量应 < 200MB
@@ -355,8 +355,8 @@ def test_startup_latency():
     collector = EventCollector()
     call_time = time.time()
 
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=2,
@@ -389,8 +389,8 @@ def test_public_server_download():
     save_path = str(DOWNLOAD_DIR / "public_5mb.zip")
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=4,
@@ -417,13 +417,13 @@ def test_callback_json_format():
     url = f"{LOCAL_BASE_URL}/tiny_1kb.bin"
     save_path = str(DOWNLOAD_DIR / "json_test.bin")
 
-    raw_events = []
+    raw_events: list[dict[str, Any]] = []
 
-    def raw_callback(event: dict, msg: dict):
+    def raw_callback(event: dict[str, Any], msg: dict[str, Any]):
         raw_events.append({"event": event, "msg": msg})
 
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=2,
@@ -434,9 +434,9 @@ def test_callback_json_format():
 
     # 检查 event 字段
     valid = True
-    issues = []
+    issues: list[str] = []
     for entry in raw_events:
-        ev = entry["event"]
+        ev: dict[str, Any] | Any = entry["event"]
         if not isinstance(ev, dict):
             valid = False
             issues.append("event 不是 dict")
@@ -465,8 +465,8 @@ def test_repeated_create_destroy():
         save_path = str(DOWNLOAD_DIR / f"repeat_{i}.bin")
         collector = EventCollector()
         try:
-            with TTHSDownloader(DLL_PATH) as dl:
-                dl_id = dl.start_download(
+            with TLDownloader(DLL_PATH) as dl:
+                dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
                     urls=[url],
                     save_paths=[save_path],
                     thread_count=2,
@@ -476,7 +476,7 @@ def test_repeated_create_destroy():
                 collector.wait(timeout=10)
                 if Path(save_path).exists():
                     success_count += 1
-        except Exception as e:
+        except Exception as e: # pyright: ignore[reportUnusedVariable]
             pass
 
     passed = success_count == iterations
@@ -493,8 +493,8 @@ def test_unicode_filename():
     save_path = str(DOWNLOAD_DIR / "下载测试_文件名.bin")
 
     collector = EventCollector()
-    with TTHSDownloader(DLL_PATH) as dl:
-        dl_id = dl.start_download(
+    with TLDownloader(DLL_PATH) as dl:
+        dl_id = dl.start_download( # pyright: ignore[reportUnusedVariable]
             urls=[url],
             save_paths=[save_path],
             thread_count=2,
@@ -513,17 +513,17 @@ def test_concurrent_multiple_downloaders():
     """测试 13: 并发多个独立下载器"""
     clean_download_dir()
 
-    files = ["tiny_1kb.bin", "small_100kb.bin", "medium_1mb.bin"]
-    collectors = []
-    threads = []
+    files: list[str] = ["tiny_1kb.bin", "small_100kb.bin", "medium_1mb.bin"]
+    collectors: list[EventCollector] = []
+    threads: list[threading.Thread] = []
 
-    def download_one(filename, idx):
+    def download_one(filename: str, idx: int):
         url = f"{LOCAL_BASE_URL}/{filename}"
         save_path = str(DOWNLOAD_DIR / f"concurrent_{idx}_{filename}")
         collector = EventCollector()
         collectors.append(collector)
-        with TTHSDownloader(DLL_PATH) as dl:
-            dl.start_download(
+        with TLDownloader(DLL_PATH) as dl:
+            dl.start_download( # pyright: ignore[reportUnusedVariable]
                 urls=[url],
                 save_paths=[save_path],
                 thread_count=2,
@@ -553,11 +553,11 @@ def test_concurrent_multiple_downloaders():
 
 def main():
     print(f"\n{'#'*70}")
-    print(f"#{' '*17}TTHSD Next 综合测试报告{' '*17}#")
+    print(f"#{' '*17}TLD 综合测试报告{' '*17}#")
     print(f"#{' '*15}{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{' '*22}#")
     print(f"{'#'*70}")
 
-    results = {}
+    results: dict[str, bool] = {}
 
     # ── 一、功能验证 ──
     print_header("一、功能验证")

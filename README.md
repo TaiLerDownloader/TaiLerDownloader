@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>TTHSD Next (TT High Speed Downloader)</h1>
+  <h1>TLD Core TaiLerDownloader Core</h1>
   <p>一个高性能、跨平台、多语言可调用的下载引擎内核</p>
   <img src="https://img.shields.io/badge/Rust-1.75+-orange.svg" alt="Rust Version">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android%20%7C%20iOS%20%7C%20HarmonyOS-blue.svg" alt="Platform">
@@ -15,14 +15,13 @@
 
 ## 概述
 
-**TTHSD 核心**（TT High Speed Downloader Core）是一个高性能、跨平台、多语言可调用的下载引擎内核，可为外部项目提供强大的下载能力支持，使开发者能够在自己的应用中轻松集成专业级的文件下载功能。该项目使用 **Rust** 语言开发，编译为 DLL/SO/DYLIB 动态库，供全语言原生调用。
+**TLD 核心**（TaiLerDownloader Core）是一个高性能、跨平台、多语言可调用的下载引擎内核，可为外部项目提供强大的下载能力支持，使开发者能够在自己的应用中轻松集成专业级的文件下载功能。该项目使用 **Rust** 语言开发，编译为 DLL/SO/DYLIB 动态库，供全语言原生调用。
 
 > [!TIP]
-> 本项目是 **TTHSD Next**（Rust 版本），它是 [TTHSD Golang](https://github.com/TTHSDownloader/TTHighSpeedDownloader) 的 Rust 完全重写版本。
-> 
-> TTHSD Next 的对外调用方式与 TTHSD Golang 相同，并且拥有原生 C/C++ FFI 及 JNI 接口包装。
-> 
-> **注**：[TTHSD Golang](https://github.com/TTHSDownloader/TTHighSpeedDownloader) 已经停止开发，强烈建议所有新项目迁移至性能更优的 TTHSD Next。
+> 本项目是 [TaiLerDownloader Golang](https://github.com/TaiLerDownloader/TTHighSpeedDownloader) 的 Rust 完全重写版本。
+>
+> Tip: TLD Core 原名 TaiLerDownloader Next ，现在已改名为 TLD Core
+> **注**：[TaiLerDownloader Golang](https://github.com/TaiLerDownloader/TTHighSpeedDownloader) 已经停止开发，强烈建议所有新项目迁移至性能更优的 TLD。
 
 ## ✨ 功能特性
 
@@ -45,7 +44,7 @@
 
 ## 🌐 支持的下载协议
 
-由于内置了灵活的协议路由工厂，TTHSD Next 原生支持多达 **7 种**下载协议环境：
+由于内置了灵活的协议路由工厂，TaiLerDownloader Next 原生支持多达 **7 种**下载协议环境：
 - **HTTP / HTTPS**: 支持动态工作量窃取的自适应并发分片，并附带针对反爬机制的 TLS 证书指纹伪装能力。
 - **HTTP/3 (QUIC)**: 针对支持 `Alt-Svc: h3` 头的服务器，进行无缝探查并使用 QUIC UDP 提速。
 - **FTP / FTPS**: 提供全功能的带密码登录或匿名服务器文件访问下载能力。
@@ -56,7 +55,7 @@
 
 ## 📊 和 Golang 版本 (前代) 的性能对比
 
-作为一个采用系统级语言重写的下一代内核，TTHSD Next 带来了根本性的提升：
+作为一个采用系统级语言重写的下一代内核，TLD Core 带来了根本性的提升：
 
 - 🚀 **更快的绝对速度**: 网卡吞吐极限更高。
 - 📉 **极低的内存占用**: 峰值内存占用大幅度下降（通常运行在十几 MB 测试级别内，不会随并发任务直线上升）。
@@ -69,28 +68,28 @@
 
 ## 📦 发行版下载与目录结构
 
-您可以直接在 GitHub 的 `Releases` 页面中下载预先编译好的开箱即用压缩包 `TTHSD_Release.7z`，其结构如下：
+您可以直接在 GitHub 的 `Releases` 页面中下载预先编译好的开箱即用压缩包 `TaiLerDownloader_Release.7z`，其结构如下：
 
 ```text
-📁 TTHSD_Release/
+📁 TaiLerDownloader_Release/
  ├── 📁 desktop/
- │    ├── tthsd.dll           # Windows x86_64 动态库
- │    ├── tthsd_arm64.dll     # Windows ARM64 动态库
- │    ├── tthsd.so            # Linux x86_64 动态库
- │    ├── tthsd_arm64.so      # Linux ARM64 动态库
- │    ├── tthsd.dylib         # macOS Intel 动态库
- │    └── tthsd_arm64.dylib   # macOS Silicon 动态库
+ │    ├── TaiLerDownloader.dll           # Windows x86_64 动态库
+ │    ├── TaiLerDownloader_arm64.dll     # Windows ARM64 动态库
+ │    ├── TaiLerDownloader.so            # Linux x86_64 动态库
+ │    ├── TaiLerDownloader_arm64.so      # Linux ARM64 动态库
+ │    ├── TaiLerDownloader.dylib         # macOS Intel 动态库
+ │    └── TaiLerDownloader_arm64.dylib   # macOS Silicon 动态库
  ├── 📁 android/
- │    ├── tthsd_android_arm64.so # Android ARM64 库
- │    ├── tthsd_android_armv7.so # Android 32位 (armeabi-v7a)
- │    └── tthsd_android_x86_64.so# Android 模拟器库
+ │    ├── TaiLerDownloader_android_arm64.so # Android ARM64 库
+ │    ├── TaiLerDownloader_android_armv7.so # Android 32位 (armeabi-v7a)
+ │    └── TaiLerDownloader_android_x86_64.so# Android 模拟器库
  ├── 📁 harmony/
- │    └── tthsd_harmony_arm64.so # HarmonyOS ARM64 库
+ │    └── TaiLerDownloader_harmony_arm64.so # HarmonyOS ARM64 库
  ├── 📁 ios/
- │    └── tthsd_ios_arm64_device.dylib # iOS ARM64 设备库
- │    └── tthsd_ios_arm64_simulator.dylib # iOS ARM64 模拟器库
+ │    └── TaiLerDownloader_ios_arm64_device.dylib # iOS ARM64 设备库
+ │    └── TaiLerDownloader_ios_arm64_simulator.dylib # iOS ARM64 模拟器库
  └── 📁 scripts/
-      ├── TTHSD_interface.py     # Python FFI 接口封装示范
+      ├── TaiLerDownloader_interface.py     # Python FFI 接口封装示范
       └── test_comprehensive.py  # 本地全量功能、稳定性与性能压测套件
 ```
 
@@ -98,14 +97,14 @@
 
 ## 🚀 快速上手 (Python 示例)
 
-你可以通过内置的 `ctype` 直接调用 TTHSD。我们提供了 `TTHSD_interface.py` （在 scripts 目录下）方便你将其作为参考直接集成进 Python 等其他高级语言项目中。
+你可以通过内置的 `ctype` 直接调用 TaiLerDownloader。我们提供了 `tld_interface.py` （在 scripts 目录下）方便你将其作为参考直接集成进 Python 等其他高级语言项目中。
 
 ```python
 import time
-from scripts.TTHSD_interface import TTHSDownloader, EventLogger
+from scripts.TaiLerDownloader_interface import TaiLerDownloader, EventLogger
 
 # 1. 实例化下载器引擎，跨平台自动加载对应的动态链接库
-downloader = TTHSDownloader('./desktop/tthsd.so') # 以Linux路径为例
+downloader = TaiLerDownloader('./desktop/TaiLerDownloader.so') # 以Linux路径为例
 
 # 2. 定义回调日志监听器以接收下载器的异步事件
 logger_callback = EventLogger()
@@ -142,8 +141,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 随后拉取本项目源代码：
 ```bash
-git clone https://github.com/YourUsername/TTHSD.git
-cd TTHSD
+git clone https://github.com/TaiLerDownloader/TaiLerDownloader.git
+cd TaiLerDownloader
 ```
 
 ### 2. 编译为本地平台库 (Windows / Linux / macOS)
@@ -175,8 +174,8 @@ cargo ndk --target arm64-v8a --platform 21 build --release --features android
 
 ## 其他
 
-### 文档：[文档](https://docss.sxxyrry.qzz.io/TTHSD/)
-### 文档（备用）：[文档](https://docss-23xr.pages.dev/TTHSD/)
+### 文档：[文档](https://docss.sxxyrry.qzz.io/TaiLerDownloader/)
+### 文档（备用）：[文档](https://docss-23xr.pages.dev/TaiLerDownloader/)
 
 ### **本项目隶属于 TT23XR Studio**
 

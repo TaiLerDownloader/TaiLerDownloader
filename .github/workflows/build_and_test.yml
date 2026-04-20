@@ -1,4 +1,4 @@
-name: TTHSD Next — 跨平台构建与测试
+name: TaiLerDownloader Next — 跨平台构建与测试
 
 on:
   push:
@@ -23,33 +23,33 @@ jobs:
           # ── Windows ──
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: tthsd.dll
-            lib_name: tthsd.dll
+            artifact_name: TaiLerDownloader.dll
+            lib_name: TaiLerDownloader.dll
           - os: windows-latest
             target: aarch64-pc-windows-msvc
-            artifact_name: tthsd_arm64.dll
-            lib_name: tthsd.dll
+            artifact_name: TaiLerDownloader_arm64.dll
+            lib_name: TaiLerDownloader.dll
 
           # ── Linux ──
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: tthsd.so
-            lib_name: libtthsd.so
+            artifact_name: TaiLerDownloader.so
+            lib_name: libTaiLerDownloader.so
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            artifact_name: tthsd_arm64.so
-            lib_name: libtthsd.so
+            artifact_name: TaiLerDownloader_arm64.so
+            lib_name: libTaiLerDownloader.so
             cross: true
 
           # ── macOS ──
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: tthsd.dylib
-            lib_name: libtthsd.dylib
+            artifact_name: TaiLerDownloader.dylib
+            lib_name: libTaiLerDownloader.dylib
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: tthsd_arm64.dylib
-            lib_name: libtthsd.dylib
+            artifact_name: TaiLerDownloader_arm64.dylib
+            lib_name: libTaiLerDownloader.dylib
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.artifact_name }} (${{ matrix.target }})
@@ -164,7 +164,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   build-ios:
     runs-on: macos-latest
-    name: tthsd_ios.dylib (iOS)
+    name: TaiLerDownloader_ios.dylib (iOS)
     strategy:
       fail-fast: false
       matrix:
@@ -207,20 +207,20 @@ jobs:
 
       - name: 📋 重命名产物
         run: |
-          SRC="target/${{ matrix.target }}/release/libtthsd.dylib"
-          DST="tthsd_ios_${{ matrix.suffix }}.dylib"
+          SRC="target/${{ matrix.target }}/release/libTaiLerDownloader.dylib"
+          DST="TaiLerDownloader_ios_${{ matrix.suffix }}.dylib"
           cp "$SRC" "$DST"
           echo "产物: $DST ($(du -h "$DST" | cut -f1))"
 
       - name: 🔪 使用 strip 减小 iOS 库体积
         run: |
-          strip -S tthsd_ios_${{ matrix.suffix }}.dylib
+          strip -S TaiLerDownloader_ios_${{ matrix.suffix }}.dylib
 
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: tthsd_ios_${{ matrix.suffix }}.dylib
-          path: tthsd_ios_${{ matrix.suffix }}.dylib
+          name: TaiLerDownloader_ios_${{ matrix.suffix }}.dylib
+          path: TaiLerDownloader_ios_${{ matrix.suffix }}.dylib
           retention-days: 30
 
   # ═══════════════════════════════════════════════════════════════
@@ -228,7 +228,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   build-android:
     runs-on: ubuntu-latest
-    name: tthsd_android.so (Android)
+    name: TaiLerDownloader_android.so (Android)
     strategy:
       fail-fast: false
       matrix:
@@ -284,14 +284,14 @@ jobs:
 
       - name: 📋 重命名产物
         run: |
-          SRC="target/${{ matrix.target }}/release/libtthsd.so"
-          DST="tthsd_android_${{ matrix.suffix }}.so"
+          SRC="target/${{ matrix.target }}/release/libTaiLerDownloader.so"
+          DST="TaiLerDownloader_android_${{ matrix.suffix }}.so"
           cp "$SRC" "$DST"
           echo "产物: $DST ($(du -h "$DST" | cut -f1))"
 
       - name: 🔪 使用 strip 减小 Android 库体积
         run: |
-          ARTIFACT="tthsd_android_${{ matrix.suffix }}.so"
+          ARTIFACT="TaiLerDownloader_android_${{ matrix.suffix }}.so"
           # 安装 binutils (包含 strip)
           sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi binutils-x86-64-linux-gnu
           # 根据架构选择对应的 strip
@@ -304,8 +304,8 @@ jobs:
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: tthsd_android_${{ matrix.suffix }}.so
-          path: tthsd_android_${{ matrix.suffix }}.so
+          name: TaiLerDownloader_android_${{ matrix.suffix }}.so
+          path: TaiLerDownloader_android_${{ matrix.suffix }}.so
           retention-days: 30
 
   # ═══════════════════════════════════════════════════════════════
@@ -313,7 +313,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   build-harmony:
     runs-on: ubuntu-latest
-    name: tthsd_harmony.so (HarmonyOS)
+    name: TaiLerDownloader_harmony.so (HarmonyOS)
     strategy:
       fail-fast: false
       matrix:
@@ -551,8 +551,8 @@ jobs:
 
       - name: 📋 重命名产物
         run: |
-          SRC="target/${{ matrix.target }}/release/libtthsd.so"
-          DST="tthsd_harmony_${{ matrix.suffix }}.so"
+          SRC="target/${{ matrix.target }}/release/libTaiLerDownloader.so"
+          DST="TaiLerDownloader_harmony_${{ matrix.suffix }}.so"
           if [ -f "$SRC" ]; then
             cp "$SRC" "$DST"
             echo "产物: $DST ($(du -h "$DST" | cut -f1))"
@@ -566,21 +566,21 @@ jobs:
 
       # - name: 📦 使用 UPX 压缩产物
       #   run: |
-      #     ARTIFACT="tthsd_harmony_${{ matrix.suffix }}.so"
+      #     ARTIFACT="TaiLerDownloader_harmony_${{ matrix.suffix }}.so"
       #     upx --best --lzma "$ARTIFACT"
 
       - name: 📦 使用 UPX 5.1.1 压缩产物
         uses: crazy-max/ghaction-upx@v3
         with:
           version: v5.1.1
-          files: tthsd_harmony_${{ matrix.suffix }}.so
+          files: TaiLerDownloader_harmony_${{ matrix.suffix }}.so
           args: --best --lzma
 
       - name: 📤 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: tthsd_harmony_${{ matrix.suffix }}.so
-          path: tthsd_harmony_${{ matrix.suffix }}.so
+          name: TaiLerDownloader_harmony_${{ matrix.suffix }}.so
+          path: TaiLerDownloader_harmony_${{ matrix.suffix }}.so
           retention-days: 30
 
   # ═══════════════════════════════════════════════════════════════
@@ -593,13 +593,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: tthsd.so
+            artifact: TaiLerDownloader.so
             lib_env: LD_LIBRARY_PATH
           - os: macos-latest
-            artifact: tthsd_arm64.dylib
+            artifact: TaiLerDownloader_arm64.dylib
             lib_env: DYLD_LIBRARY_PATH
           - os: windows-latest
-            artifact: tthsd.dll
+            artifact: TaiLerDownloader.dll
             lib_env: PATH
     runs-on: ${{ matrix.os }}
     name: 测试 (${{ matrix.os }})
@@ -638,9 +638,9 @@ jobs:
       - name: 🧪 运行 Python 单元测试
         shell: bash
         run: |
-          echo "运行 TTHSD Python 单元测试..."
+          echo "运行 TaiLerDownloader Python 单元测试..."
           cd scripts
-          python3 -m pytest test_tthsd.py -v --tb=short || true
+          python3 -m pytest test_TaiLerDownloader.py -v --tb=short || true
         continue-on-error: true
 
   # ═══════════════════════════════════════════════════════════════
@@ -666,36 +666,36 @@ jobs:
           mkdir -p release_pkg
 
           # 桌面平台
-          cp artifacts/tthsd.so/tthsd.so release_pkg/ 2>/dev/null || true
-          cp artifacts/tthsd_arm64.so/tthsd_arm64.so release_pkg/ 2>/dev/null || true
-          cp artifacts/tthsd.dll/tthsd.dll release_pkg/ 2>/dev/null || true
-          cp artifacts/tthsd_arm64.dll/tthsd_arm64.dll release_pkg/ 2>/dev/null || true
-          cp artifacts/tthsd.dylib/tthsd.dylib release_pkg/ 2>/dev/null || true
-          cp artifacts/tthsd_arm64.dylib/tthsd_arm64.dylib release_pkg/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader.so/TaiLerDownloader.so release_pkg/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_arm64.so/TaiLerDownloader_arm64.so release_pkg/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader.dll/TaiLerDownloader.dll release_pkg/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_arm64.dll/TaiLerDownloader_arm64.dll release_pkg/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader.dylib/TaiLerDownloader.dylib release_pkg/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_arm64.dylib/TaiLerDownloader_arm64.dylib release_pkg/ 2>/dev/null || true
 
           # Android
           mkdir -p release_pkg/android
-          cp artifacts/tthsd_android_arm64.so/tthsd_android_arm64.so release_pkg/android/ 2>/dev/null || true
-          cp artifacts/tthsd_android_armv7.so/tthsd_android_armv7.so release_pkg/android/ 2>/dev/null || true
-          cp artifacts/tthsd_android_x86_64.so/tthsd_android_x86_64.so release_pkg/android/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_android_arm64.so/TaiLerDownloader_android_arm64.so release_pkg/android/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_android_armv7.so/TaiLerDownloader_android_armv7.so release_pkg/android/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_android_x86_64.so/TaiLerDownloader_android_x86_64.so release_pkg/android/ 2>/dev/null || true
 
           # iOS
           mkdir -p release_pkg/ios
-          cp artifacts/tthsd_ios_arm64_device.dylib/tthsd_ios_arm64_device.dylib release_pkg/ios/ 2>/dev/null || true
-          cp artifacts/tthsd_ios_arm64_simulator.dylib/tthsd_ios_arm64_simulator.dylib release_pkg/ios/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_ios_arm64_device.dylib/TaiLerDownloader_ios_arm64_device.dylib release_pkg/ios/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_ios_arm64_simulator.dylib/TaiLerDownloader_ios_arm64_simulator.dylib release_pkg/ios/ 2>/dev/null || true
 
           # 鸿蒙
           mkdir -p release_pkg/harmony
-          cp artifacts/tthsd_harmony_arm64.so/tthsd_harmony_arm64.so release_pkg/harmony/ 2>/dev/null || true
-          cp artifacts/tthsd_harmony_x86_64.so/tthsd_harmony_x86_64.so release_pkg/harmony/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_harmony_arm64.so/TaiLerDownloader_harmony_arm64.so release_pkg/harmony/ 2>/dev/null || true
+          cp artifacts/TaiLerDownloader_harmony_x86_64.so/TaiLerDownloader_harmony_x86_64.so release_pkg/harmony/ 2>/dev/null || true
 
           ls -lhR release_pkg/
 
           cd release_pkg
-          7z a -t7z -m0=lzma2 -mx=9 ../TTHSD-${{ github.ref_name }}.7z *
+          7z a -t7z -m0=lzma2 -mx=9 ../TaiLerDownloader-${{ github.ref_name }}.7z *
 
       - name: 🚀 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: TTHSD-${{ github.ref_name }}.7z
+          files: TaiLerDownloader-${{ github.ref_name }}.7z
           generate_release_notes: true

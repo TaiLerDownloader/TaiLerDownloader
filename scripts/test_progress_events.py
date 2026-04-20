@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-TTHSD Progress Event 功能验证脚本
+TLD Progress Event 功能验证脚本
 =================================
 直接加载编译好的 .so 动态库，下载一个公网小文件，
 验证是否能正确收到 Update 类型的进度事件。
@@ -15,35 +14,35 @@ import threading
 from pathlib import Path
 
 # ── 配置 ──
-LIB_PATH = Path("/home/amd/TTSD_GitHub_Repo/target/release/libtthsd.so")
-TEST_URL = "http://127.0.0.1:19877/libtthsd.so"
-SAVE_PATH = "/tmp/tthsd_progress_test.zip"
+LIB_PATH = Path("/home/amd/TTSD_GitHub_Repo/target/release/libTLD.so")
+TEST_URL = "http://127.0.0.1:19877/libTLD.so"
+SAVE_PATH = "/tmp/TLD_progress_test.zip"
 
 # ── 回调类型定义 ──
 CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p)
 
 # ── 事件收集器 ──
-events_collected = []
-event_types_seen = set()
+events_collected: list[dict[str, object]] = []
+event_types_seen: set[str] = set()
 update_count = 0
 done_event = threading.Event()
 
-def callback_handler(event_ptr, data_ptr):
+def callback_handler(event_ptr: ctypes.c_char_p | bytes, data_ptr: ctypes.c_char_p | bytes):
     global update_count
     try:
-        event_str = event_ptr.decode("utf-8") if event_ptr else "{}"
-        data_str = data_ptr.decode("utf-8") if data_ptr else "{}"
-        event = json.loads(event_str)
-        data = json.loads(data_str)
+        event_str: str = str(event_ptr.decode("utf-8") if event_ptr else "{}") # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
+        data_str: str = str(data_ptr.decode("utf-8") if data_ptr else "{}") # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
+        event: dict[str, object] = json.loads(event_str)
+        data: dict[str, object] = json.loads(data_str)
 
-        event_type = event.get("Type", "unknown")
+        event_type: str = event.get("Type", "unknown") # pyright: ignore[reportAssignmentType]
         event_types_seen.add(event_type)
         events_collected.append({"type": event_type, "data": data})
 
         if event_type == "update":
             update_count += 1
-            total_bytes = data.get("total_bytes", 0)
-            speed_mbps = data.get("current_speed_mbps", 0)
+            total_bytes: int = data.get("total_bytes", 0) # pyright: ignore[reportAssignmentType]
+            speed_mbps: float = data.get("current_speed_mbps", 0) # pyright: ignore[reportAssignmentType]
             if update_count % 4 == 0:  # 每 2 秒打印一次
                 print(f"  [UPDATE #{update_count}] 已下载: {total_bytes / 1024 / 1024:.2f} MB, 速度: {speed_mbps:.2f} MB/s")
         elif event_type == "start":
@@ -64,7 +63,7 @@ def callback_handler(event_ptr, data_ptr):
 
 def main():
     print("=" * 60)
-    print("  TTHSD Progress Event 功能验证")
+    print("  TLD Progress Event 功能验证")
     print("=" * 60)
 
     # 1. 加载动态库

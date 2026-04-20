@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-TTHSD Next 命令行测试器
+TLD 命令行测试器
 
 功能：
 - 交互式命令行界面，支持所有下载器操作
@@ -10,7 +9,7 @@ TTHSD Next 命令行测试器
 - 支持暂停/恢复/停止操作
 - 支持顺序/并行下载模式
 
-依赖: Python 3.11+, tthsd_interface.py
+依赖: Python 3.11+, TLD_interface.py
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from tthsd_interface import TTHSDownloader
+from scripts.tld_interface import TLDownloader
 
 
 # ------------------------------------------------------------------
@@ -77,7 +76,7 @@ def color_print(color: str, text: str, end: str = "\n"):
 EXAMPLE_URLS: dict[str, list[tuple[str, str, str]]] = {
     "http": [
         ("HTTP 小文件", "https://www.baidu.com/img/flexible/logo/pc/result.png", "baidu_logo.png"),
-        ("HTTP 中文件", "https://github.com/TTHSDownloader/TTHSDNext/releases/latest", "release_info.html"),
+        ("HTTP 中文件", "https://github.com/TLDownloader/TLDNext/releases/latest", "release_info.html"),
     ],
     "http3": [
         ("HTTP/3 (Cloudflare)", "https://www.speedtest.net/api/js/config", "speedtest_config.json"),
@@ -411,8 +410,8 @@ class ProgressHandler:
 # 命令行测试器
 # ------------------------------------------------------------------
 
-class TTHSDTester:
-    """TTHSD 命令行测试器"""
+class TLDTester:
+    """TLD 命令行测试器"""
 
     def __init__(self, dll_path: Path | None = None, dir_path: Path | None = None):
         """
@@ -425,14 +424,14 @@ class TTHSDTester:
         self.dll_path = dll_path
         self.dir_path = dir_path
         self.downloaders: dict[int, DownloaderInstance] = {}
-        self._downloader: TTHSDownloader | None = None
+        self._downloader: TLDownloader | None = None
         self.verbose = True
         self._running = True
 
-    def _init_downloader(self) -> TTHSDownloader:
+    def _init_downloader(self) -> TLDownloader:
         """初始化下载器实例"""
         if self._downloader is None:
-            self._downloader = TTHSDownloader(
+            self._downloader = TLDownloader(
                 dll_path=self.dll_path,
                 dir_path=self.dir_path
             )
@@ -684,14 +683,14 @@ class TTHSDTester:
     def interactive_mode(self):
         """交互模式"""
         color_print(Color.bold, "\n═══════════════════════════════════════════════════════════")
-        color_print(Color.bold, "         TTHSD Next 命令行测试器 - 交互模式")
+        color_print(Color.bold, "         TLD 命令行测试器 - 交互模式")
         color_print(Color.bold, "═══════════════════════════════════════════════════════════")
 
         print(f"\n{Color.dim}输入 'help' 查看可用命令{Color.reset}\n")
 
         while self._running:
             try:
-                cmd_input = input(f"{Color.green}TTHSD>{Color.reset} ").strip()
+                cmd_input = input(f"{Color.green}TLD>{Color.reset} ").strip()
                 if not cmd_input:
                     continue
 
@@ -940,7 +939,7 @@ class TTHSDTester:
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="TTHSD Next 命令行测试器",
+        description="TLD 命令行测试器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -948,7 +947,7 @@ def parse_args():
   python tester.py
 
   # 指定动态库路径
-  python tester.py --dll ./tthsd.dll
+  python tester.py --dll ./TLD.dll
 
   # 直接下载
   python tester.py download https://example.com/file.zip
@@ -1009,7 +1008,7 @@ def main():
         Color.disable()
 
     # 创建测试器
-    tester = TTHSDTester(
+    tester = TLDTester(
         dll_path=args.dll,
         dir_path=args.dir
     )

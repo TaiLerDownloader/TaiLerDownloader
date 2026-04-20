@@ -1,16 +1,16 @@
 """
-TTHSD_interface.py - TT 高速下载器 Python 接口封装
+TLD_interface.py - TT 高速下载器 Python 接口封装
 
-兼容 TTHSD Next (Rust 版本) 与 TTHSD Golang 版本的动态库。
+兼容 TLD (Rust 版本) 与 TLD Golang 版本的动态库。
 自动根据操作系统选择动态库文件名：
-  - Windows: tthsd.dll
-  - macOS:   tthsd.dylib
-  - Linux:   tthsd.so
+  - Windows: TLD.dll
+  - macOS:   TLD.dylib
+  - Linux:   TLD.so
 
 依赖: Python 3.11+, 标准库 (ctypes, json, queue)
 
 作者: TT23XR Studio
-文档: https://docss.sxxyrry.qzz.io/TTHSD/
+文档: https://docss.sxxyrry.qzz.io/TLD/
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ CallbackFunc = "Callable[[dict[str, Any], dict[str, Any]], None]"
 # ------------------------------------------------------------------
 
 _log_queue: queue.Queue[Any] = queue.Queue()
-_logger = logging.getLogger("TTHSD_interface")
+_logger = logging.getLogger("TLD_interface")
 if not _logger.handlers:
     _handler = logging.StreamHandler(sys.stdout)
     _handler.setFormatter(logging.Formatter("[%(asctime)s][%(name)s][%(levelname)s] %(message)s"))
@@ -51,7 +51,7 @@ if not _logger.handlers:
 
 # 尝试写入日志文件
 try:
-    _log_file_path = Path(sys.executable).parent / "TTHSDPyInter.log"
+    _log_file_path = Path(sys.executable).parent / "TLDPyInter.log"
     _file_handler = logging.FileHandler(str(_log_file_path), mode="a", encoding="utf-8")
     _file_handler.setFormatter(logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s"))
     _logger.addHandler(_file_handler)
@@ -69,14 +69,71 @@ _C_CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p)
 
 
 def _default_dll_name() -> str:
-    """根据当前操作系统返回默认动态库文件名。"""
+    """根据当前操作系统返回默认动态库文件名。
+    
+    TLD 默认只支持 64 位系统，且命名规则为：
+    - 桌面系统（ Windows, Linux, MacOS）是
+      - x86_64 架构使用默认名称（TaiLerDownloader.*）
+      - ARM64 架构使用带后缀的名称（TaiLerDownloader_arm64.*）
+    - Android 版本是
+      - TaiLerDownloader_android_x86_64.so
+      - TaiLerDownloader_android_arm64.so
+      - TaiLerDownloader_android_armv7.so
+    - HarmonyOS 版本是
+      - TaiLerDownloader_harmony_x86_64.so
+      - TaiLerDownloader_harmony_arm64.so
+    - IOS 版本是
+      - TaiLerDownloader_ios_arm64_device.dylib
+      - TaiLerDownloader_ios_arm64_simulator.dylib
+    """
     system = platform.system()
+    machine = platform.machine().lower()
+    
+    # Android 特殊处理
+    if hasattr(sys, 'getandroidapilevel'):
+        android_map = {
+            ('x86_64', 'amd64'): "TaiLerDownloader_android_x86_64.so",
+            ('arm64', 'aarch64'): "TaiLerDownloader_android_arm64.so",
+            ('armv7', 'armv7l'): "TaiLerDownloader_android_armv7.so",
+        }
+        for patterns, filename in android_map.items():
+            if machine in patterns:
+                return filename
+        raise OSError(f"不支持的 Android 架构: {machine}")
+    
+    # HarmonyOS 检测
+    is_harmony = (
+        system == "HarmonyOS" or 
+        (system == "Linux" and any(x in platform.version().lower() for x in ('harmony', 'ohos')))
+    )
+    if is_harmony:
+        if machine in ('arm64', 'aarch64'):
+            return "TaiLerDownloader_harmony_arm64.so"
+        return "TaiLerDownloader_harmony_x86_64.so"
+    
+    # 桌面系统
     if system == "Windows":
-        return "tthsd.dll"
-    elif system == "Darwin":
-        return "tthsd.dylib"
-    else:
-        return "tthsd.so"
+        if machine in ('arm64', 'aarch64'):
+            return "TaiLerDownloader_arm64.dll"
+        return "TaiLerDownloader.dll"
+    
+    if system == "Darwin":
+        if machine in ('arm64', 'aarch64'):
+            return "TaiLerDownloader_arm64.dylib"
+        return "TaiLerDownloader.dylib"
+    
+    if system == "iOS":
+        # iOS 需要区分设备和模拟器，暂时统一使用 arm64 后缀的版本，用户可根据实际情况替换为对应的 dylib 文件
+        if machine in ('arm64', 'aarch64'):
+            return "TaiLerDownloader_ios_arm64_device.dylib"  # 或 TaiLerDownloader_ios_arm64_simulator.dylib
+        raise OSError(f"不支持的 iOS 架构: {machine}")
+    
+    if system == "Linux":
+        if machine in ('arm64', 'aarch64'):
+            return "TaiLerDownloader_arm64.so"
+        return "TaiLerDownloader.so"
+    
+    raise OSError(f"不支持的操作系统: {system}")
 
 
 def _build_tasks_json(
@@ -126,9 +183,9 @@ def _build_tasks_json(
 # 主封装类
 # ------------------------------------------------------------------
 
-class TTHSDownloader:
+class TLDownloader:
     """
-    TTHSD 下载器 Python 封装类。
+    TLD 下载器 Python 封装类。
 
     支持功能:
     - 创建下载器实例（立即启动 / 仅创建）
@@ -137,7 +194,7 @@ class TTHSDownloader:
     - 通过回调函数接收 update / end / endOne / msg / err 等事件
 
     基本用法:
-        with TTHSDownloader() as dl:
+        with TLDownloader() as dl:
             dl_id = dl.start_download(
                 urls=["https://example.com/a.zip"],
                 save_paths=["./a.zip"],
@@ -169,7 +226,7 @@ class TTHSDownloader:
         if not dll_path.exists():
             raise FileNotFoundError(
                 f"动态库文件不存在: {dll_path}\n"
-                "请确保 tthsd.so (Linux) / tthsd.dll (Windows) / tthsd.dylib (macOS) "
+                "请确保 TLD.so (Linux) / TLD.dll (Windows) / TLD.dylib (macOS) "
                 "位于执行目录，或通过 dll_path 参数显式指定路径。"
             )
 
@@ -649,13 +706,13 @@ class TTHSDownloader:
         通常无需手动调用，Python GC 会自动释放。
         """
         self._callback_refs.clear()
-        _logger.info("TTHSDownloader.close() 已调用，回调引用已清理")
+        _logger.info("TLDownloader.close() 已调用，回调引用已清理")
 
     # ------------------------------------------------------------------
     # 上下文管理器支持
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> TTHSDownloader:
+    def __enter__(self) -> TLDownloader:
         return self
 
     def __exit__(
@@ -757,7 +814,7 @@ def quick_download(
         )
     """
     dl_id = -1
-    with TTHSDownloader(dll_path) as dl:
+    with TLDownloader(dll_path) as dl:
         dl_id = dl.start_download(
             urls=urls,
             save_paths=save_paths,

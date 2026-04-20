@@ -1,19 +1,19 @@
 """
-TTHSD Unit Test Framework
+TLD Unit Test Framework
 
-用于测试 TTHSD 动态库的各种功能。
-使用 Python 调用 tthsd_interface.py 来测试 DLL。
+用于测试 TLD 动态库的各种功能。
+使用 Python 调用 TLD_interface.py 来测试 DLL。
 
 用法:
-    python test_tthsd.py                    # 运行所有测试
-    python test_tthsd.py -v                 # 详细输出
-    python test_tthsd.py TestDownload       # 运行特定测试类
-    python test_tthsd.py TestDownload.test_http_download  # 运行特定测试
+    python test_TLD.py                    # 运行所有测试
+    python test_TLD.py -v                 # 详细输出
+    python test_TLD.py TestDownload       # 运行特定测试类
+    python test_TLD.py TestDownload.test_http_download  # 运行特定测试
 """
 
 from __future__ import annotations
 
-import json
+import json # pyright: ignore[reportUnusedImport]
 import os
 import sys
 import tempfile
@@ -24,17 +24,17 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from tthsd_interface import TTHSDownloader, EventLogger
+from scripts.tld_interface import TLDownloader, EventLogger # pyright: ignore[reportUnusedImport]
 
 
-class TestTTHSDInterface(unittest.TestCase):
-    """测试 TTHSD 接口的基本功能"""
+class TestTLDInterface(unittest.TestCase):
+    """测试 TLD 接口的基本功能"""
 
     @classmethod
     def setUpClass(cls):
-        cls.dll_path = Path(__file__).parent.parent
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.test_files = []
+        cls.dll_path: Path = Path(__file__).parent.parent
+        cls.temp_dir: str = tempfile.mkdtemp()
+        cls.test_files: list[str] = []
 
     @classmethod
     def tearDownClass(cls):
@@ -51,12 +51,12 @@ class TestTTHSDInterface(unittest.TestCase):
 
     def test_interface_load(self):
         """测试接口能否正常加载"""
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
-            self.assertIsNotNone(dl._dll)
+        with TLDownloader(dll_path=self.dll_path) as dl:
+            self.assertIsNotNone(dl._dll) # pyright: ignore[reportPrivateUsage]
 
     def test_get_downloader_invalid_params(self):
         """测试无效参数处理"""
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.get_downloader(
                 urls=[],
                 save_paths=[],
@@ -69,7 +69,7 @@ class TestTTHSDInterface(unittest.TestCase):
         save_path = os.path.join(self.temp_dir, "test_single.bin")
         self.test_files.append(save_path)
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.get_downloader(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -90,9 +90,9 @@ class TestDownloadFunctionality(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dll_path = Path(__file__).parent.parent
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.test_files = []
+        cls.dll_path: Path = Path(__file__).parent.parent
+        cls.temp_dir: str = tempfile.mkdtemp()
+        cls.test_files: list[str] = []
 
     @classmethod
     def tearDownClass(cls):
@@ -113,7 +113,7 @@ class TestDownloadFunctionality(unittest.TestCase):
         save_path = os.path.join(self.temp_dir, "test_http.bin")
         self.test_files.append(save_path)
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -135,7 +135,7 @@ class TestDownloadFunctionality(unittest.TestCase):
         ]
         self.test_files.extend(save_paths)
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=test_urls,
                 save_paths=save_paths,
@@ -151,12 +151,12 @@ class TestDownloadFunctionality(unittest.TestCase):
         save_path = os.path.join(self.temp_dir, "test_callback.bin")
         self.test_files.append(save_path)
 
-        callback_events = []
+        callback_events: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
         def my_callback(event: dict[str, Any], msg: dict[str, Any]) -> None:
             callback_events.append((event, msg))
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -174,9 +174,9 @@ class TestSpeedLimit(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dll_path = Path(__file__).parent.parent
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.test_files = []
+        cls.dll_path: Path = Path(__file__).parent.parent
+        cls.temp_dir: str = tempfile.mkdtemp()
+        cls.test_files: list[str] = []
 
     @classmethod
     def tearDownClass(cls):
@@ -197,7 +197,7 @@ class TestSpeedLimit(unittest.TestCase):
         save_path = os.path.join(self.temp_dir, "test_speed_limit.bin")
         self.test_files.append(save_path)
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.get_downloader(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -233,7 +233,7 @@ class TestProxySupport(unittest.TestCase):
         test_url = "https://httpbin.org/bytes/1024"
         save_path = os.path.join(self.temp_dir, "test_proxy.bin")
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.get_downloader(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -251,7 +251,7 @@ class TestProxySupport(unittest.TestCase):
         test_url = "https://httpbin.org/bytes/1024"
         save_path = os.path.join(self.temp_dir, "test_no_proxy.bin")
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.get_downloader(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -285,7 +285,7 @@ class TestRetryConfig(unittest.TestCase):
         test_url = "https://httpbin.org/bytes/1024"
         save_path = os.path.join(self.temp_dir, "test_retry.bin")
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.get_downloader(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -309,9 +309,9 @@ class TestPerformanceStats(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dll_path = Path(__file__).parent.parent
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.test_files = []
+        cls.dll_path: Path = Path(__file__).parent.parent
+        cls.temp_dir: str = tempfile.mkdtemp()
+        cls.test_files: list[str] = []
 
     @classmethod
     def tearDownClass(cls):
@@ -332,7 +332,7 @@ class TestPerformanceStats(unittest.TestCase):
         save_path = os.path.join(self.temp_dir, "test_stats.bin")
         self.test_files.append(save_path)
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -356,7 +356,7 @@ class TestPerformanceStats(unittest.TestCase):
 
     def test_performance_stats_no_downloader(self):
         """测试获取不存在的下载器统计"""
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             stats = dl.get_performance_stats(99999)
             self.assertIsInstance(stats, dict)
 
@@ -374,7 +374,7 @@ class TestErrorHandling(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             save_path = os.path.join(temp_dir, "test_error.bin")
 
-            with TTHSDownloader(dll_path=self.dll_path) as dl:
+            with TLDownloader(dll_path=self.dll_path) as dl:
                 dl_id = dl.start_download(
                     urls=[test_url],
                     save_paths=[save_path],
@@ -389,9 +389,9 @@ class TestPauseResume(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dll_path = Path(__file__).parent.parent
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.test_files = []
+        cls.dll_path: Path = Path(__file__).parent.parent
+        cls.temp_dir: str = tempfile.mkdtemp()
+        cls.test_files: list[str] = []
 
     @classmethod
     def tearDownClass(cls):
@@ -412,7 +412,7 @@ class TestPauseResume(unittest.TestCase):
         save_path = os.path.join(self.temp_dir, "test_pause.bin")
         self.test_files.append(save_path)
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -440,9 +440,9 @@ class TestHeaders(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dll_path = Path(__file__).parent.parent
-        cls.temp_dir = tempfile.mkdtemp()
-        cls.test_files = []
+        cls.dll_path: Path = Path(__file__).parent.parent
+        cls.temp_dir: str = tempfile.mkdtemp()
+        cls.test_files: list[str] = []
 
     @classmethod
     def tearDownClass(cls):
@@ -468,7 +468,7 @@ class TestHeaders(unittest.TestCase):
             "X-Test-Header": "test-value",
         }
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -491,7 +491,7 @@ class TestHeaders(unittest.TestCase):
             }
         ]
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=[test_url],
                 save_paths=[save_path],
@@ -522,7 +522,7 @@ class TestHeaders(unittest.TestCase):
             {"X-Task-Header": "task-value-2"},
         ]
 
-        with TTHSDownloader(dll_path=self.dll_path) as dl:
+        with TLDownloader(dll_path=self.dll_path) as dl:
             dl_id = dl.start_download(
                 urls=test_urls,
                 save_paths=save_paths,
@@ -537,7 +537,7 @@ class TestHeaders(unittest.TestCase):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("TTHSD Unit Test Framework")
+    print("TLD Unit Test Framework")
     print("=" * 60)
     print(f"测试目录: {Path(__file__).parent}")
     print(f"临时目录: {tempfile.gettempdir()}")

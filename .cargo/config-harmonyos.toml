@@ -48,4 +48,4 @@ rustflags = [
 ]
 
 [env]
-OHOS_NDK = { value = "C:\\Users\\sxxyrry_XR\\AppData\\Local\\Huawei\\Sdk\\ohos-ndk" }
+OHOS_NDK = { value = "C:\\Users\\UserName\\AppData\\Local\\Huawei\\Sdk\\ohos-ndk" }

@@ -1,26 +1,26 @@
-#!/usr/bin/env python3
 """
-TTHSD Next 本地测试 HTTP 服务器
+TLD Next 本地测试 HTTP 服务器
 - 支持 Range 请求（分块下载）
 - 支持 HEAD 请求（获取文件大小）
 - 支持 Content-Length 头
 - 自动生成测试文件
 """
 
-import os
-import sys
+import os # pyright: ignore[reportUnusedImport]
+import sys # pyright: ignore[reportUnusedImport]
 import hashlib
 import json
-import threading
+import threading # pyright: ignore[reportUnusedImport]
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+from typing import Any
 
 TEST_DIR = Path(__file__).parent / "test_files"
 SERVER_PORT = 18080
 
 # ─── 测试文件生成 ───────────────────────────────────────────────
 
-def generate_test_files():
+def generate_test_files() -> dict[str, dict[str, str | int]]:
     """生成不同大小的测试文件，内容为可验证的重复模式"""
     TEST_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -32,7 +32,7 @@ def generate_test_files():
         "huge_100mb.bin":  100 * 1024 * 1024,
     }
 
-    manifest = {}
+    manifest: dict[str, dict[str, str | int]] = {}
 
     for name, size in files.items():
         filepath = TEST_DIR / name
@@ -76,7 +76,7 @@ def generate_test_files():
 class RangeRequestHandler(BaseHTTPRequestHandler):
     """支持 Range 请求的 HTTP 文件服务器"""
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: tuple[Any]):
         """简化日志格式"""
         print(f"  [{self.client_address[0]}] {format % args}")
 
@@ -186,7 +186,7 @@ class RangeRequestHandler(BaseHTTPRequestHandler):
 
 def main():
     print("=" * 60)
-    print("  TTHSD Next 本地测试 HTTP 服务器")
+    print("  TLD Next 本地测试 HTTP 服务器")
     print("=" * 60)
 
     print("\n📦 生成测试文件...")
